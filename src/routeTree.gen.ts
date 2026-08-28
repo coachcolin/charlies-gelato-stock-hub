@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
+import { Route as EditStockRouteImport } from './routes/edit-stock'
 import { Route as RemoveRouteImport } from './routes/remove'
 import { Route as StockRouteImport } from './routes/stock'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const AddRoute = AddRouteImport.update({
   id: '/add',
   path: '/add',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditStockRoute = EditStockRouteImport.update({
+  id: '/edit-stock',
+  path: '/edit-stock',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RemoveRoute = RemoveRouteImport.update({
@@ -38,12 +44,14 @@ const StockRoute = StockRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/edit-stock': typeof EditStockRoute
   '/remove': typeof RemoveRoute
   '/stock': typeof StockRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/edit-stock': typeof EditStockRoute
   '/remove': typeof RemoveRoute
   '/stock': typeof StockRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/edit-stock': typeof EditStockRoute
   '/remove': typeof RemoveRoute
   '/stock': typeof StockRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/remove' | '/stock'
+  fullPaths: '/' | '/add' | '/edit-stock' | '/remove' | '/stock'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/remove' | '/stock'
-  id: '__root__' | '/' | '/add' | '/remove' | '/stock'
+  to: '/' | '/add' | '/edit-stock' | '/remove' | '/stock'
+  id: '__root__' | '/' | '/add' | '/edit-stock' | '/remove' | '/stock'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
+  EditStockRoute: typeof EditStockRoute
   RemoveRoute: typeof RemoveRoute
   StockRoute: typeof StockRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/add'
       fullPath: '/add'
       preLoaderRoute: typeof AddRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/edit-stock': {
+      id: '/edit-stock'
+      path: '/edit-stock'
+      fullPath: '/edit-stock'
+      preLoaderRoute: typeof EditStockRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/remove': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
+  EditStockRoute: EditStockRoute,
   RemoveRoute: RemoveRoute,
   StockRoute: StockRoute,
 }
