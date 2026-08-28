@@ -164,7 +164,8 @@ function DataPage() {
                 {f.priority ? <Star className="size-3.5 fill-primary text-primary" /> : null}
               </span>
               <span className="text-xs text-muted-foreground">
-                targets {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
+                {f.category === "sorbetto" ? "Sorbetto" : "Gelato"} · targets{" "}
+                {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
               </span>
             </span>
             {!f.active ? (
@@ -246,6 +247,33 @@ function DataPage() {
                     }
                   />
                 </Field>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Category
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ["gelato", "Gelato"],
+                        ["sorbetto", "Sorbetto"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        variant={editing.category === value ? "default" : "outline"}
+                        className="h-12 rounded-xl"
+                        onClick={() => {
+                          setEditing({ ...editing, category: value });
+                          update.mutate({ id: editing.id, patch: { category: value } });
+                        }}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2.5">
                   <Label htmlFor="active">Active</Label>

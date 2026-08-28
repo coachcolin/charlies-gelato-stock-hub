@@ -35,6 +35,7 @@ export type Database = {
       flavours: {
         Row: {
           active: boolean
+          category: string
           created_at: string
           desired_low: number
           desired_mid: number
@@ -48,6 +49,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          category?: string
           created_at?: string
           desired_low?: number
           desired_mid?: number
@@ -61,6 +63,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          category?: string
           created_at?: string
           desired_low?: number
           desired_mid?: number
