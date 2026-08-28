@@ -164,7 +164,7 @@ function DataPage() {
                 {f.priority ? <Star className="size-3.5 fill-primary text-primary" /> : null}
               </span>
               <span className="text-xs text-muted-foreground">
-                {f.category === "sorbetto" ? "Sorbetto" : "Gelato"} · targets{" "}
+                {f.category === "sorbetto" ? "Sorbetto" : "Gelato"} · min{" "}
                 {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
               </span>
             </span>
@@ -298,7 +298,7 @@ function DataPage() {
 
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Desired trays in stock
+                    Minimum trays in stock
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {(
