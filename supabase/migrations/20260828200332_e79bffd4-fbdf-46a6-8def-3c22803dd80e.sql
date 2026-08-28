@@ -1,0 +1,1 @@
+ALTER TABLE public.flavours ADD COLUMN category text NOT NULL DEFAULT 'gelato';
