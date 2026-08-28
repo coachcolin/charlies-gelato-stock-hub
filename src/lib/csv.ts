@@ -5,7 +5,7 @@ function splitLine(line: string, delim: string): string[] {
   let cur = "";
   let quoted = false;
   for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+    const ch = line[i] as string;
     if (ch === '"') {
       if (quoted && line[i + 1] === '"') {
         cur += '"';
@@ -38,13 +38,15 @@ export function parseOrderCsv(text: string): CsvResult {
   const lines = clean.split("\n").filter((l) => l.trim().length > 0);
   if (lines.length === 0) return { rows: [], wholesaler: null, reference: null, headers: [] };
 
-  const delim = (lines[0].match(/\t/g) ?? []).length > (lines[0].match(/,/g) ?? []).length ? "\t" : ",";
+  const first = lines[0] ?? "";
+  const delim =
+    (first.match(/\t/g) ?? []).length > (first.match(/,/g) ?? []).length ? "\t" : ",";
 
   // find the header row within the first 10 lines
   let headerIdx = 0;
   let headers: string[] = [];
   for (let i = 0; i < Math.min(lines.length, 10); i++) {
-    const cells = splitLine(lines[i], delim).map((c) => c.toLowerCase());
+    const cells = splitLine(lines[i] ?? "", delim).map((c) => c.toLowerCase());
     const hasName = cells.some((c) => NAME_KEYS.some((k) => c.includes(k)));
     const hasQty = cells.some((c) => QTY_KEYS.some((k) => c.includes(k)));
     if (hasName && hasQty) {
@@ -53,7 +55,7 @@ export function parseOrderCsv(text: string): CsvResult {
       break;
     }
   }
-  if (headers.length === 0) headers = splitLine(lines[0], delim).map((c) => c.toLowerCase());
+  if (headers.length === 0) headers = splitLine(first, delim).map((c) => c.toLowerCase());
 
   const findCol = (keys: string[]) =>
     headers.findIndex((h) => keys.some((k) => h.includes(k)));
@@ -70,7 +72,7 @@ export function parseOrderCsv(text: string): CsvResult {
   let reference: string | null = null;
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
-    const cells = splitLine(lines[i], delim);
+    const cells = splitLine(lines[i] ?? "", delim);
     const name = (cells[nameCol] ?? "").trim();
     const qty = Number((cells[qtyCol] ?? "").replace(/[^0-9.\-]/g, ""));
     if (!name || !Number.isFinite(qty) || qty === 0) continue;
