@@ -200,7 +200,7 @@ function ProductionPage() {
         <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" />
         <p className="text-sm">
           Based on recent sales, wholesale orders still to go out and your{" "}
-          <strong>{season.data ?? "mid"} season</strong> targets, this is what we think you'll
+          <strong>{season.data ?? "mid"} season</strong> minimums, this is what we think you'll
           need.
         </p>
       </div>
@@ -219,7 +219,7 @@ function ProductionPage() {
         ))}
         {suggestions.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            Everything is at or above target — nothing urgent to make.
+            Everything is at or above its minimum — nothing urgent to make.
           </p>
         ) : null}
       </div>

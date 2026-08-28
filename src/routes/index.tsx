@@ -79,7 +79,7 @@ const TILES = [
   {
     to: "/data",
     label: "Data Management",
-    hint: "Flavours, targets & priorities",
+    hint: "Flavours, minimums & priorities",
     icon: Database,
     tone: "cream" as const,
   },

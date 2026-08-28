@@ -136,21 +136,32 @@ function StockPage() {
         />
       </div>
 
+      <p className="mb-3 px-1 text-xs text-muted-foreground">
+        Chips highlight flavours vs their {season.data ?? "mid"} season minimum:{" "}
+        <span className="font-semibold text-primary">below minimum</span> needs attention,{" "}
+        <span className="font-semibold text-accent-foreground">watch</span> is within 2 trays of it.
+      </p>
       <div className="space-y-2">
         {list.map((f) => {
-          const target = desiredFor(f, season.data ?? "mid");
-          const low = target > 0 && f.stock_qty < target * 0.5;
+          const min = desiredFor(f, season.data ?? "mid");
+          const below = min > 0 && f.stock_qty < min;
+          const watch = min > 0 && !below && f.stock_qty <= min + 2;
           return (
             <div key={f.id} className="surface flex items-center gap-3 px-4 py-3">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-display text-base">{f.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  target {target} trays{f.priority ? " · priority" : ""}
+                  min {min} trays{f.priority ? " · priority" : ""}
+                  {below ? " · below minimum" : watch ? " · watch" : ""}
                 </span>
               </span>
               <span
                 className={`rounded-full px-3 py-1.5 font-display text-lg ${
-                  low ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                  below
+                    ? "bg-primary text-primary-foreground"
+                    : watch
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-muted text-foreground"
                 }`}
               >
                 {f.stock_qty}
