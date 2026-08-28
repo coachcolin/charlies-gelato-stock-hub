@@ -102,6 +102,7 @@ function FlavourButton({
           <span className="truncate font-display text-base">{f.name}</span>
           {f.priority ? <Star className="size-3.5 shrink-0 fill-primary text-primary" /> : null}
         </span>
+        <span className="text-xs font-medium text-muted-foreground capitalize">{f.category}</span>
       </span>
       {meta}
     </button>
