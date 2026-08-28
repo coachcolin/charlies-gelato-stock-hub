@@ -136,6 +136,11 @@ function StockPage() {
         />
       </div>
 
+      <p className="mb-3 px-1 text-xs text-muted-foreground">
+        Chips highlight flavours vs their {season.data ?? "mid"} season minimum:{" "}
+        <span className="font-semibold text-primary">below minimum</span> needs attention,{" "}
+        <span className="font-semibold text-accent-foreground">watch</span> is within 2 trays of it.
+      </p>
       <div className="space-y-2">
         {list.map((f) => {
           const min = desiredFor(f, season.data ?? "mid");
