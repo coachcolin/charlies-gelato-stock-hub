@@ -14,13 +14,314 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      flavours: {
+        Row: {
+          active: boolean
+          created_at: string
+          desired_low: number
+          desired_mid: number
+          desired_peak: number
+          id: string
+          image_url: string | null
+          name: string
+          priority: boolean
+          stock_qty: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          desired_low?: number
+          desired_mid?: number
+          desired_peak?: number
+          id?: string
+          image_url?: string | null
+          name: string
+          priority?: boolean
+          stock_qty?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          desired_low?: number
+          desired_mid?: number
+          desired_peak?: number
+          id?: string
+          image_url?: string | null
+          name?: string
+          priority?: boolean
+          stock_qty?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      freezers: {
+        Row: {
+          capacity_trays: number
+          created_at: string
+          current_trays: number
+          id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          capacity_trays?: number
+          created_at?: string
+          current_trays?: number
+          id?: string
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          capacity_trays?: number
+          created_at?: string
+          current_trays?: number
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      production_report_items: {
+        Row: {
+          created_at: string
+          done: boolean
+          flavour_id: string | null
+          flavour_name: string
+          id: string
+          produced_qty: number | null
+          reason: string | null
+          report_id: string
+          suggested_qty: number
+        }
+        Insert: {
+          created_at?: string
+          done?: boolean
+          flavour_id?: string | null
+          flavour_name: string
+          id?: string
+          produced_qty?: number | null
+          reason?: string | null
+          report_id: string
+          suggested_qty?: number
+        }
+        Update: {
+          created_at?: string
+          done?: boolean
+          flavour_id?: string | null
+          flavour_name?: string
+          id?: string
+          produced_qty?: number | null
+          reason?: string | null
+          report_id?: string
+          suggested_qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_report_items_flavour_id_fkey"
+            columns: ["flavour_id"]
+            isOneToOne: false
+            referencedRelation: "flavours"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_report_items_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "production_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_reports: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          season: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          season?: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          season?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      stock_movements: {
+        Row: {
+          created_at: string
+          flavour_id: string | null
+          flavour_name: string
+          id: string
+          kind: string
+          note: string | null
+          order_id: string | null
+          qty: number
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          flavour_id?: string | null
+          flavour_name: string
+          id?: string
+          kind: string
+          note?: string | null
+          order_id?: string | null
+          qty: number
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          flavour_id?: string | null
+          flavour_name?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          order_id?: string | null
+          qty?: number
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_flavour_id_fkey"
+            columns: ["flavour_id"]
+            isOneToOne: false
+            referencedRelation: "flavours"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "wholesale_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wholesale_order_items: {
+        Row: {
+          created_at: string
+          flavour_id: string | null
+          flavour_name: string
+          id: string
+          order_id: string
+          qty: number
+        }
+        Insert: {
+          created_at?: string
+          flavour_id?: string | null
+          flavour_name: string
+          id?: string
+          order_id: string
+          qty?: number
+        }
+        Update: {
+          created_at?: string
+          flavour_id?: string | null
+          flavour_name?: string
+          id?: string
+          order_id?: string
+          qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wholesale_order_items_flavour_id_fkey"
+            columns: ["flavour_id"]
+            isOneToOne: false
+            referencedRelation: "flavours"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wholesale_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "wholesale_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wholesale_orders: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          is_future: boolean
+          reference: string | null
+          send_date: string | null
+          status: string
+          updated_at: string
+          wholesaler: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          is_future?: boolean
+          reference?: string | null
+          send_date?: string | null
+          status?: string
+          updated_at?: string
+          wholesaler: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          is_future?: boolean
+          reference?: string | null
+          send_date?: string | null
+          status?: string
+          updated_at?: string
+          wholesaler?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      apply_stock_movements: {
+        Args: {
+          _kind: string
+          _movements: Json
+          _note?: string
+          _order_id?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
