@@ -10,33 +10,128 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AddRouteImport } from './routes/add'
+import { Route as DataRouteImport } from './routes/data'
+import { Route as EditStockRouteImport } from './routes/edit-stock'
+import { Route as ProductionRouteImport } from './routes/production'
+import { Route as RemoveRouteImport } from './routes/remove'
+import { Route as StockRouteImport } from './routes/stock'
+import { Route as WholesaleRouteImport } from './routes/wholesale'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AddRoute = AddRouteImport.update({
+  id: '/add',
+  path: '/add',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DataRoute = DataRouteImport.update({
+  id: '/data',
+  path: '/data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditStockRoute = EditStockRouteImport.update({
+  id: '/edit-stock',
+  path: '/edit-stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionRoute = ProductionRouteImport.update({
+  id: '/production',
+  path: '/production',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RemoveRoute = RemoveRouteImport.update({
+  id: '/remove',
+  path: '/remove',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockRoute = StockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WholesaleRoute = WholesaleRouteImport.update({
+  id: '/wholesale',
+  path: '/wholesale',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/add': typeof AddRoute
+  '/data': typeof DataRoute
+  '/edit-stock': typeof EditStockRoute
+  '/production': typeof ProductionRoute
+  '/remove': typeof RemoveRoute
+  '/stock': typeof StockRoute
+  '/wholesale': typeof WholesaleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/add': typeof AddRoute
+  '/data': typeof DataRoute
+  '/edit-stock': typeof EditStockRoute
+  '/production': typeof ProductionRoute
+  '/remove': typeof RemoveRoute
+  '/stock': typeof StockRoute
+  '/wholesale': typeof WholesaleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/add': typeof AddRoute
+  '/data': typeof DataRoute
+  '/edit-stock': typeof EditStockRoute
+  '/production': typeof ProductionRoute
+  '/remove': typeof RemoveRoute
+  '/stock': typeof StockRoute
+  '/wholesale': typeof WholesaleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/add'
+    | '/data'
+    | '/edit-stock'
+    | '/production'
+    | '/remove'
+    | '/stock'
+    | '/wholesale'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/add'
+    | '/data'
+    | '/edit-stock'
+    | '/production'
+    | '/remove'
+    | '/stock'
+    | '/wholesale'
+  id:
+    | '__root__'
+    | '/'
+    | '/add'
+    | '/data'
+    | '/edit-stock'
+    | '/production'
+    | '/remove'
+    | '/stock'
+    | '/wholesale'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AddRoute: typeof AddRoute
+  DataRoute: typeof DataRoute
+  EditStockRoute: typeof EditStockRoute
+  ProductionRoute: typeof ProductionRoute
+  RemoveRoute: typeof RemoveRoute
+  StockRoute: typeof StockRoute
+  WholesaleRoute: typeof WholesaleRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +143,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/add': {
+      id: '/add'
+      path: '/add'
+      fullPath: '/add'
+      preLoaderRoute: typeof AddRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/data': {
+      id: '/data'
+      path: '/data'
+      fullPath: '/data'
+      preLoaderRoute: typeof DataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/edit-stock': {
+      id: '/edit-stock'
+      path: '/edit-stock'
+      fullPath: '/edit-stock'
+      preLoaderRoute: typeof EditStockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production': {
+      id: '/production'
+      path: '/production'
+      fullPath: '/production'
+      preLoaderRoute: typeof ProductionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/remove': {
+      id: '/remove'
+      path: '/remove'
+      fullPath: '/remove'
+      preLoaderRoute: typeof RemoveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock': {
+      id: '/stock'
+      path: '/stock'
+      fullPath: '/stock'
+      preLoaderRoute: typeof StockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wholesale': {
+      id: '/wholesale'
+      path: '/wholesale'
+      fullPath: '/wholesale'
+      preLoaderRoute: typeof WholesaleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AddRoute: AddRoute,
+  DataRoute: DataRoute,
+  EditStockRoute: EditStockRoute,
+  ProductionRoute: ProductionRoute,
+  RemoveRoute: RemoveRoute,
+  StockRoute: StockRoute,
+  WholesaleRoute: WholesaleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
