@@ -117,7 +117,7 @@ function DataPage() {
       <div className="surface mb-4 p-4">
         <p className="font-display text-base">Current season</p>
         <p className="mb-3 text-xs text-muted-foreground">
-          Drives which desired stock level the production report aims for.
+          Drives which minimum stock level the production report uses for each flavour.
         </p>
         <div className="grid grid-cols-3 gap-2">
           {SEASONS.map((s) => (

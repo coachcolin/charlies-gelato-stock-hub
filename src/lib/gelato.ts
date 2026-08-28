@@ -250,7 +250,7 @@ export function buildSuggestions(
       if (hasSales && twoWeek > 0)
         bits.push(`selling ~${weeklyUsage.toFixed(1)} trays/week`);
       if (owed > 0) bits.push(`${owed} committed to wholesale`);
-      bits.push(`${f.stock_qty} in stock vs ${desired} target`);
+      bits.push(`${f.stock_qty} in stock vs ${desired} minimum`);
       if (f.priority) bits.push("priority flavour");
 
       return {
