@@ -2,11 +2,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type Season = "peak" | "mid" | "low";
 
+export type FlavourCategory = "gelato" | "sorbetto";
+
 export type Flavour = {
   id: string;
   name: string;
   active: boolean;
   priority: boolean;
+  category: FlavourCategory;
   image_url: string | null;
   stock_qty: number;
   desired_peak: number;
