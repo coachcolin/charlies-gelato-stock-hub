@@ -164,7 +164,8 @@ function DataPage() {
                 {f.priority ? <Star className="size-3.5 fill-primary text-primary" /> : null}
               </span>
               <span className="text-xs text-muted-foreground">
-                targets {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
+                {f.category === "sorbetto" ? "Sorbetto" : "Gelato"} · targets{" "}
+                {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
               </span>
             </span>
             {!f.active ? (
