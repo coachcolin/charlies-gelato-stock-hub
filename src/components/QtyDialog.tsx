@@ -22,7 +22,7 @@ export function QtyDialog({
 }: {
   open: boolean;
   title: string;
-  description?: string;
+  description?: string | undefined;
   initial?: number;
   confirmLabel?: string;
   onConfirm: (qty: number) => void;
