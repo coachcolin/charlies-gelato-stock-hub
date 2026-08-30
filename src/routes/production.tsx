@@ -189,7 +189,9 @@ function ProductionPage() {
                     flavour_name: f.name,
                     qty: BATCH_SIZE,
                     reason: "Added manually",
+                    note: "",
                   },
+
                 ]);
               }}
             >
