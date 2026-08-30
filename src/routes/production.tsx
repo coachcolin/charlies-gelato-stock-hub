@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Plus, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -57,10 +58,52 @@ type Draft = {
   group: AllergenGroup;
 };
 
+function DayTabs({
+  days,
+  selected,
+  onSelect,
+  trayTotals,
+}: {
+  days: number[];
+  selected: number;
+  onSelect: (day: number) => void;
+  trayTotals?: Record<number, number>;
+}) {
+  return (
+    <div className="surface flex gap-1 rounded-2xl p-1">
+      {days.map((day) => {
+        const active = day === selected;
+        return (
+          <button
+            key={day}
+            type="button"
+            onClick={() => onSelect(day)}
+            className={`flex h-12 flex-1 flex-col items-center justify-center rounded-xl transition-colors ${
+              active
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <span className="font-display text-sm leading-tight">Day {day}</span>
+            {trayTotals ? (
+              <span
+                className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-muted-foreground"}`}
+              >
+                {trayTotals[day] ?? 0} trays
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProductionPage() {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft[] | null>(null);
   const [sorbettoDay, setSorbettoDay] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(1);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
@@ -164,16 +207,34 @@ function ProductionPage() {
         }
       >
         <div className="space-y-4 pb-28">
-          {draftDays.map((day) => {
-            const items = draft.filter((d) => d.day === day);
-            if (items.length === 0) return null;
+          {weekly && draftDays.length > 1 ? (
+            <DayTabs
+              days={draftDays}
+              selected={selectedDay}
+              onSelect={setSelectedDay}
+              trayTotals={Object.fromEntries(
+                draftDays.map((day) => [
+                  day,
+                  draft.filter((d) => d.day === day).reduce((t, i) => t + i.qty, 0),
+                ]),
+              )}
+            />
+          ) : null}
+          {[
+            {
+              day: weekly && draftDays.length > 1 ? selectedDay : draftDays[0],
+              items:
+                weekly && draftDays.length > 1
+                  ? draft.filter((d) => d.day === selectedDay)
+                  : draft,
+            },
+          ].map(({ day, items }) => {
             return (
               <section key={day} className="space-y-2">
-                {weekly ? (
-                  <h2 className="flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    <span>Day {day}</span>
-                    <span>{items.reduce((t, i) => t + i.qty, 0)} trays</span>
-                  </h2>
+                {items.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Nothing on day {day} yet.
+                  </p>
                 ) : null}
                 {items.map((d) => (
                   <div key={d.flavour_id} className="surface space-y-3 p-4">
@@ -292,7 +353,12 @@ function ProductionPage() {
                   qty: BATCH_SIZE,
                   reason: "Added manually",
                   note: "",
-                  day: f.category === "sorbetto" ? sorbettoDay : 1,
+                  day:
+                    f.category === "sorbetto"
+                      ? sorbettoDay
+                      : weekly && draftDays.length > 1
+                        ? selectedDay
+                        : 1,
                   group:
                     f.category === "sorbetto"
                       ? "sorbetto"
@@ -371,16 +437,30 @@ function ProductionPage() {
       ) : null}
 
       <div className="space-y-4">
-        {dayList.map((day) => {
-          const items = scheduled.filter((s) => s.day === day);
-          if (items.length === 0) return null;
+        {weekly && dayList.length > 1 ? (
+          <DayTabs
+            days={dayList}
+            selected={selectedDay}
+            onSelect={setSelectedDay}
+            trayTotals={Object.fromEntries(
+              dayList.map((day) => [
+                day,
+                scheduled.filter((s) => s.day === day).reduce((t, i) => t + i.qty, 0),
+              ]),
+            )}
+          />
+        ) : null}
+        {(() => {
+          const items =
+            weekly && dayList.length > 1
+              ? scheduled.filter((s) => s.day === selectedDay)
+              : scheduled;
           return (
-            <section key={day} className="space-y-2">
-              {weekly ? (
-                <h2 className="flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  <span>Day {day}</span>
-                  <span>{items.reduce((t, i) => t + i.qty, 0)} trays</span>
-                </h2>
+            <section className="space-y-2">
+              {weekly && dayList.length > 1 && items.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nothing scheduled on day {selectedDay}.
+                </p>
               ) : null}
               {items.map((s) => (
                 <div key={s.flavour_id} className="surface flex items-center gap-3 p-4">
@@ -398,7 +478,7 @@ function ProductionPage() {
               ))}
             </section>
           );
-        })}
+        })()}
         {scheduled.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Everything is at or above its minimum — nothing urgent to make.
@@ -549,6 +629,7 @@ function ActiveReport({
   const qc = useQueryClient();
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const saveNote = useMutation({
     mutationFn: async ({ itemId, note }: { itemId: string; note: string }) => {
@@ -610,6 +691,15 @@ function ActiveReport({
     (a, b) => a - b,
   );
   const multiDay = dayNumbers.length > 1;
+  const activeDay = selectedDay ?? dayNumbers[0] ?? 1;
+  const dayTrayTotals = Object.fromEntries(
+    dayNumbers.map((day) => [
+      day,
+      report.items
+        .filter((i) => (i.day_index ?? 1) === day)
+        .reduce((t, i) => t + i.suggested_qty, 0),
+    ]),
+  );
 
   return (
     <AppShell
@@ -619,16 +709,18 @@ function ActiveReport({
       }`}
     >
       <div className="space-y-4">
-        {dayNumbers.map((day) => (
-          <section key={day} className="space-y-2">
-            {multiDay ? (
-              <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Day {day}
-              </h2>
-            ) : null}
-            {report.items
-              .filter((i) => (i.day_index ?? 1) === day)
-              .map((i) => {
+        {multiDay ? (
+          <DayTabs
+            days={dayNumbers}
+            selected={activeDay}
+            onSelect={setSelectedDay}
+            trayTotals={dayTrayTotals}
+          />
+        ) : null}
+        <section className="space-y-2">
+          {report.items
+            .filter((i) => (multiDay ? (i.day_index ?? 1) === activeDay : true))
+            .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           return (
             <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
@@ -696,8 +788,7 @@ function ActiveReport({
             </div>
           );
               })}
-          </section>
-        ))}
+        </section>
       </div>
 
 
