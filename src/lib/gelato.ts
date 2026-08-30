@@ -91,6 +91,8 @@ export type ProductionItem = {
   done: boolean;
   reason: string | null;
   note: string | null;
+  position: number;
+
 
 };
 
