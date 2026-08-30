@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   BATCH_SIZE,
   DEFAULT_DAY_CAPACITIES,
+  GROUP_LABEL,
   applyMovements,
   buildSuggestions,
   fetchDayCapacities,
@@ -20,7 +21,11 @@ import {
   fetchOrders,
   fetchReports,
   fetchSeason,
-  type Suggestion,
+  isWeeklySeason,
+  recommendedDays,
+  scheduleWeek,
+  type AllergenGroup,
+  type ScheduledSuggestion,
 } from "@/lib/gelato";
 
 export const Route = createFileRoute("/production")({
@@ -48,6 +53,8 @@ type Draft = {
   qty: number;
   reason: string;
   note: string;
+  day: number;
+  group: AllergenGroup;
 };
 
 function ProductionPage() {
