@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -35,6 +35,7 @@ function EditStock() {
   const [q, setQ] = useState("");
   const [draft, setDraft] = useState<Record<string, number>>({});
   const [variances, setVariances] = useState<Variance[] | null>(null);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
 
@@ -124,7 +125,7 @@ function EditStock() {
       </div>
 
       <div className="space-y-2 pb-24">
-        {list.map((f) => {
+        {list.map((f, i) => {
           const value = draft[f.id] ?? f.stock_qty;
           const changed = value !== f.stock_qty;
           return (
@@ -139,6 +140,9 @@ function EditStock() {
                 </span>
               </span>
               <Input
+                ref={(el) => {
+                  inputRefs.current[i] = el;
+                }}
                 type="number"
                 inputMode="numeric"
                 value={value}
@@ -148,6 +152,14 @@ function EditStock() {
                     [f.id]: Math.max(0, Math.round(Number(e.target.value) || 0)),
                   }))
                 }
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const next = inputRefs.current[i + 1];
+                    if (next) next.focus();
+                  }
+                }}
                 className={`h-12 w-24 text-center font-display text-lg ${
                   changed ? "border-primary" : ""
                 }`}
