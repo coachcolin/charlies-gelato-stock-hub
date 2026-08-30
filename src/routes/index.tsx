@@ -50,6 +50,13 @@ const TILES = [
     tone: "sky" as const,
   },
   {
+    to: "/soft-freezer",
+    label: "Soft Freezer Order",
+    hint: "Top up the display freezers",
+    icon: IceCreamCone,
+    tone: "cream" as const,
+  },
+  {
     to: "/stock",
     label: "Current Stock Levels",
     hint: "What's in the freezers now",
