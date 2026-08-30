@@ -308,6 +308,70 @@ function ProductionPage() {
   );
 }
 
+function AddFlavourSearch({
+  remaining,
+  onAdd,
+}: {
+  remaining: { id: string; name: string; category?: string | null }[];
+  onAdd: (f: { id: string; name: string; category?: string | null }) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const normalized = query.trim().toLowerCase();
+  const filtered = normalized
+    ? remaining
+        .filter((f) => f.name.toLowerCase().includes(normalized))
+        .slice(0, 8)
+    : remaining.slice(0, 8);
+
+  return (
+    <div className="surface relative p-3">
+      <div className="flex items-center gap-2">
+        <Plus className="size-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Type to find a flavour to add…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          className="h-11 rounded-xl border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+        />
+      </div>
+      {open && filtered.length > 0 ? (
+        <div className="absolute inset-x-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-2xl border border-border bg-card p-2 shadow-lg">
+          {filtered.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => {
+                onAdd(f);
+                setQuery("");
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-muted"
+            >
+              <span className="font-display text-base">{f.name}</span>
+              {f.category ? (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground">
+                  {f.category}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {open && normalized && filtered.length === 0 ? (
+        <div className="absolute inset-x-0 top-full z-30 mt-1 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-lg">
+          No flavours match “{query}”
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ActiveReport({
   report,
   season,
