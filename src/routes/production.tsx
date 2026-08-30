@@ -195,35 +195,21 @@ function ProductionPage() {
 
           ))}
 
-          <div className="surface flex items-center gap-2 p-3">
-            <Plus className="size-4 text-muted-foreground" />
-            <select
-              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-              value=""
-              onChange={(e) => {
-                const f = remaining.find((x) => x.id === e.target.value);
-                if (!f) return;
-                setDraft((prev) => [
-                  ...(prev ?? []),
-                  {
-                    flavour_id: f.id,
-                    flavour_name: f.name,
-                    qty: BATCH_SIZE,
-                    reason: "Added manually",
-                    note: "",
-                  },
-
-                ]);
-              }}
-            >
-              <option value="">Add a flavour…</option>
-              {remaining.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <AddFlavourSearch
+            remaining={remaining}
+            onAdd={(f) =>
+              setDraft((prev) => [
+                ...(prev ?? []),
+                {
+                  flavour_id: f.id,
+                  flavour_name: f.name,
+                  qty: BATCH_SIZE,
+                  reason: "Added manually",
+                  note: "",
+                },
+              ])
+            }
+          />
         </div>
 
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur">
