@@ -387,53 +387,69 @@ function ActiveReport({
         {report.items.map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           return (
-            <div
-              key={i.id}
-              className={`surface flex items-center gap-3 p-4 ${i.done ? "opacity-60" : ""}`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-display text-base">{i.flavour_name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {i.done ? `Made ${i.produced_qty} trays` : `Suggested ${i.suggested_qty} trays`}
+            <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-display text-base">{i.flavour_name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {i.done ? `Made ${i.produced_qty} trays` : `Suggested ${i.suggested_qty} trays`}
+                  </span>
                 </span>
-              </span>
-              {!i.done ? (
-                <>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    value={value}
-                    onChange={(e) =>
-                      setQtys((q) => ({
-                        ...q,
-                        [i.id]: Math.max(0, Number(e.target.value) || 0),
-                      }))
-                    }
-                    className="h-12 w-20 text-center font-display text-lg"
-                    aria-label={`${i.flavour_name} trays made`}
-                  />
-                  <Button
-                    size="icon"
-                    className="size-12 shrink-0 rounded-full"
-                    aria-label={`Mark ${i.flavour_name} as made`}
-                    onClick={() =>
-                      tick.mutate({
-                        itemId: i.id,
-                        flavourId: i.flavour_id,
-                        name: i.flavour_name,
-                        qty: value,
-                      })
-                    }
-                  >
+                {!i.done ? (
+                  <>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={value}
+                      onChange={(e) =>
+                        setQtys((q) => ({
+                          ...q,
+                          [i.id]: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="h-12 w-20 text-center font-display text-lg"
+                      aria-label={`${i.flavour_name} trays made`}
+                    />
+                    <Button
+                      size="icon"
+                      className="size-12 shrink-0 rounded-full"
+                      aria-label={`Mark ${i.flavour_name} as made`}
+                      onClick={() =>
+                        tick.mutate({
+                          itemId: i.id,
+                          flavourId: i.flavour_id,
+                          name: i.flavour_name,
+                          qty: value,
+                        })
+                      }
+                    >
+                      <Check className="size-5" />
+                    </Button>
+                  </>
+                ) : (
+                  <span className="flex size-12 items-center justify-center rounded-full bg-sky text-sky-foreground">
                     <Check className="size-5" />
-                  </Button>
-                </>
+                  </span>
+                )}
+              </div>
+
+              {i.done ? (
+                i.note ? (
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{i.note}</p>
+                ) : null
               ) : (
-                <span className="flex size-12 items-center justify-center rounded-full bg-sky text-sky-foreground">
-                  <Check className="size-5" />
-                </span>
+                <Textarea
+                  value={notes[i.id] ?? i.note ?? ""}
+                  onChange={(e) => setNotes((n) => ({ ...n, [i.id]: e.target.value }))}
+                  onBlur={(e) => saveNote.mutate({ itemId: i.id, note: e.target.value })}
+                  placeholder="Notes for the ice-cream makers…"
+                  rows={2}
+                  className="min-h-11 resize-y rounded-xl text-sm"
+                  aria-label={`${i.flavour_name} production notes`}
+                />
               )}
             </div>
+
           );
         })}
       </div>
