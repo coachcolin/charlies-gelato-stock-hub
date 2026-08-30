@@ -291,11 +291,15 @@ export function buildSuggestions(
   }
 
   const committed = new Map<string, number>();
+  const committedBy = new Map<string, Map<string, number>>();
   for (const o of activeOrders) {
     if (o.status !== "active") continue;
     for (const i of o.items) {
       if (!i.flavour_id) continue;
       committed.set(i.flavour_id, (committed.get(i.flavour_id) ?? 0) + i.qty);
+      const perCustomer = committedBy.get(i.flavour_id) ?? new Map<string, number>();
+      perCustomer.set(o.wholesaler, (perCustomer.get(o.wholesaler) ?? 0) + i.qty);
+      committedBy.set(i.flavour_id, perCustomer);
     }
   }
 
