@@ -243,6 +243,7 @@ export type Suggestion = {
   committed: number;
   desired: number;
   priority: boolean;
+  belowMin?: boolean;
   score: number;
 };
 
@@ -284,6 +285,7 @@ export function buildSuggestions(
       // Projected stock a week out, after committed wholesale orders.
       const projected = f.stock_qty - weeklyUsage - owed;
       const deficit = Math.max(0, Math.ceil(desired - projected));
+      const belowMin = f.stock_qty <= desired;
       const score = deficit * (f.priority ? 1.6 : 1) + (projected < 0 ? 15 : 0);
 
       const bits: string[] = [];
@@ -303,25 +305,34 @@ export function buildSuggestions(
         committed: owed,
         desired,
         priority: f.priority,
+        belowMin,
         score,
       };
     })
-    .filter((s) => s.qty > 0)
-    .sort((a, b) => b.score - a.score);
+    .filter((s) => s.qty > 0);
+
+  // Always put priority flavours that are on or under their minimum ahead of normal flavours.
+  const sorted = raw.sort((a, b) => {
+    const aUrgent = a.priority && a.belowMin;
+    const bUrgent = b.priority && b.belowMin;
+    if (aUrgent && !bUrgent) return -1;
+    if (!aUrgent && bUrgent) return 1;
+    return b.score - a.score;
+  });
 
   // Batch rounding: multiples of 4, with priority flavours getting at least 8.
-  for (const s of raw) {
+  for (const s of sorted) {
     const min = s.priority ? BATCH_SIZE * 2 : BATCH_SIZE;
     s.qty = Math.max(min, Math.ceil(s.qty / BATCH_SIZE) * BATCH_SIZE);
   }
 
   const capacity = dayCapacity ?? DEFAULT_DAY_CAPACITIES[season];
-  if (!capacity || capacity <= 0) return raw;
+  if (!capacity || capacity <= 0) return sorted;
 
-  // Fit the plan to a day's production run, in whole batches.
+  // Fit the plan to a day's production run, in whole batches, honouring the priority ordering.
   const kept: Suggestion[] = [];
   let total = 0;
-  for (const s of raw) {
+  for (const s of sorted) {
     const min = s.priority ? BATCH_SIZE * 2 : BATCH_SIZE;
     const room = capacity - total;
     if (room < min) continue;
