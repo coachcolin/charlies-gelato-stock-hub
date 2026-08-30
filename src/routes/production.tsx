@@ -48,6 +48,7 @@ function ProductionPage() {
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
   const season = useQuery({ queryKey: ["season"], queryFn: fetchSeason });
+  const capacities = useQuery({ queryKey: ["dayCapacities"], queryFn: fetchDayCapacities });
   const reports = useQuery({ queryKey: ["reports"], queryFn: fetchReports });
 
   const activeReport = (reports.data ?? []).find((r) => r.status === "active");
@@ -59,8 +60,9 @@ function ProductionPage() {
       movements.data,
       orders.data.filter((o) => o.status === "active"),
       season.data,
+      (capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data],
     );
-  }, [flavours.data, movements.data, orders.data, season.data]);
+  }, [flavours.data, movements.data, orders.data, season.data, capacities.data]);
 
   const createReport = useMutation({
     mutationFn: async (items: Draft[]) => {
