@@ -8,8 +8,10 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  DEFAULT_DAY_CAPACITIES,
   applyMovements,
   buildSuggestions,
+  fetchDayCapacities,
   db,
   fetchFlavours,
   fetchMovements,
