@@ -36,6 +36,8 @@ export type Database = {
         Row: {
           active: boolean
           category: string
+          contains_gluten: boolean
+          contains_nuts: boolean
           created_at: string
           desired_low: number
           desired_mid: number
@@ -50,6 +52,8 @@ export type Database = {
         Insert: {
           active?: boolean
           category?: string
+          contains_gluten?: boolean
+          contains_nuts?: boolean
           created_at?: string
           desired_low?: number
           desired_mid?: number
@@ -64,6 +68,8 @@ export type Database = {
         Update: {
           active?: boolean
           category?: string
+          contains_gluten?: boolean
+          contains_nuts?: boolean
           created_at?: string
           desired_low?: number
           desired_mid?: number
@@ -110,6 +116,7 @@ export type Database = {
       production_report_items: {
         Row: {
           created_at: string
+          day_index: number
           done: boolean
           flavour_id: string | null
           flavour_name: string
@@ -123,6 +130,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          day_index?: number
           done?: boolean
           flavour_id?: string | null
           flavour_name: string
@@ -136,6 +144,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          day_index?: number
           done?: boolean
           flavour_id?: string | null
           flavour_name?: string
@@ -168,22 +177,28 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          days: number
           id: string
           season: string
+          sorbetto_day: number
           status: string
         }
         Insert: {
           completed_at?: string | null
           created_at?: string
+          days?: number
           id?: string
           season?: string
+          sorbetto_day?: number
           status?: string
         }
         Update: {
           completed_at?: string | null
           created_at?: string
+          days?: number
           id?: string
           season?: string
+          sorbetto_day?: number
           status?: string
         }
         Relationships: []

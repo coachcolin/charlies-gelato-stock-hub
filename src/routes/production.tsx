@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   BATCH_SIZE,
   DEFAULT_DAY_CAPACITIES,
+  GROUP_LABEL,
   applyMovements,
   buildSuggestions,
   fetchDayCapacities,
@@ -20,7 +21,11 @@ import {
   fetchOrders,
   fetchReports,
   fetchSeason,
-  type Suggestion,
+  isWeeklySeason,
+  recommendedDays,
+  scheduleWeek,
+  type AllergenGroup,
+  type ScheduledSuggestion,
 } from "@/lib/gelato";
 
 export const Route = createFileRoute("/production")({
@@ -48,11 +53,14 @@ type Draft = {
   qty: number;
   reason: string;
   note: string;
+  day: number;
+  group: AllergenGroup;
 };
 
 function ProductionPage() {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft[] | null>(null);
+  const [sorbettoDay, setSorbettoDay] = useState(1);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
@@ -63,22 +71,43 @@ function ProductionPage() {
 
   const activeReport = (reports.data ?? []).find((r) => r.status === "active");
 
-  const suggestions: Suggestion[] = useMemo(() => {
-    if (!flavours.data || !movements.data || !orders.data || !season.data) return [];
-    return buildSuggestions(
+  const currentSeason = season.data ?? "mid";
+  const dayCapacity = (capacities.data ?? DEFAULT_DAY_CAPACITIES)[currentSeason];
+
+  const { scheduled, days } = useMemo(() => {
+    if (!flavours.data || !movements.data || !orders.data || !season.data)
+      return { scheduled: [] as ScheduledSuggestion[], days: 1 };
+    const activeOrders = orders.data.filter((o) => o.status === "active");
+    // Uncapped first, so we know how big the week needs to be.
+    const uncapped = buildSuggestions(
       flavours.data,
       movements.data,
-      orders.data.filter((o) => o.status === "active"),
+      activeOrders,
       season.data,
-      (capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data],
+      0,
     );
-  }, [flavours.data, movements.data, orders.data, season.data, capacities.data]);
+    const needed = uncapped.reduce((t, s) => t + s.qty, 0);
+    const dayCount = recommendedDays(needed, dayCapacity, season.data);
+    const fitted = buildSuggestions(
+      flavours.data,
+      movements.data,
+      activeOrders,
+      season.data,
+      dayCapacity * dayCount,
+    );
+    return {
+      scheduled: scheduleWeek(fitted, dayCount, dayCapacity, sorbettoDay),
+      days: dayCount,
+    };
+  }, [flavours.data, movements.data, orders.data, season.data, dayCapacity, sorbettoDay]);
+
+  const weekly = isWeeklySeason(currentSeason);
 
   const createReport = useMutation({
     mutationFn: async (items: Draft[]) => {
       const res = await db
         .from("production_reports")
-        .insert({ season: season.data ?? "mid" })
+        .insert({ season: currentSeason, days, sorbetto_day: sorbettoDay })
         .select("id")
         .single();
       if (res.error) throw new Error(res.error.message);
@@ -91,7 +120,7 @@ function ProductionPage() {
           suggested_qty: i.qty,
           reason: i.reason,
           note: i.note.trim() || null,
-
+          day_index: i.day,
           position: idx,
         })),
       );
@@ -121,79 +150,136 @@ function ProductionPage() {
     const remaining = (flavours.data ?? []).filter(
       (f) => f.active && !draft.some((d) => d.flavour_id === f.id),
     );
+    const draftDays = Array.from(
+      new Set([...draft.map((d) => d.day), ...Array.from({ length: days }, (_, i) => i + 1)]),
+    ).sort((a, b) => a - b);
+
     return (
-      <AppShell title="Review the plan" subtitle="Adjust quantities, remove or add flavours">
-        <div className="space-y-2 pb-28">
-          {draft.map((d) => (
-            <div key={d.flavour_id} className="surface space-y-3 p-4">
-              <div className="flex items-start gap-3">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-display text-base">{d.flavour_name}</span>
-                  <span className="text-xs text-muted-foreground">{d.reason}</span>
-                </span>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  step={BATCH_SIZE}
-                  min={0}
-                  value={d.qty}
-                  onChange={(e) =>
-                    setDraft((prev) =>
-                      (prev ?? []).map((x) =>
-                        x.flavour_id === d.flavour_id
-                          ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
-                          : x,
-                      ),
-                    )
-                  }
-                  onBlur={(e) =>
-                    setDraft((prev) =>
-                      (prev ?? []).map((x) =>
-                        x.flavour_id === d.flavour_id
-                          ? {
-                              ...x,
-                              qty:
-                                Math.ceil(
-                                  (Math.max(0, Number(e.target.value) || 0)) / BATCH_SIZE,
-                                ) * BATCH_SIZE,
+      <AppShell
+        title="Review the plan"
+        subtitle={
+          weekly
+            ? `${days}-day week · sorbetti on day ${sorbettoDay}`
+            : "Adjust quantities, remove or add flavours"
+        }
+      >
+        <div className="space-y-4 pb-28">
+          {draftDays.map((day) => {
+            const items = draft.filter((d) => d.day === day);
+            if (items.length === 0) return null;
+            return (
+              <section key={day} className="space-y-2">
+                {weekly ? (
+                  <h2 className="flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    <span>Day {day}</span>
+                    <span>{items.reduce((t, i) => t + i.qty, 0)} trays</span>
+                  </h2>
+                ) : null}
+                {items.map((d) => (
+                  <div key={d.flavour_id} className="surface space-y-3 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-display text-base">
+                          {d.flavour_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {d.group !== "plain" ? `${GROUP_LABEL[d.group]} · ` : ""}
+                          {d.reason}
+                        </span>
+                      </span>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        step={BATCH_SIZE}
+                        min={0}
+                        value={d.qty}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            (prev ?? []).map((x) =>
+                              x.flavour_id === d.flavour_id
+                                ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
+                                : x,
+                            ),
+                          )
+                        }
+                        onBlur={(e) =>
+                          setDraft((prev) =>
+                            (prev ?? []).map((x) =>
+                              x.flavour_id === d.flavour_id
+                                ? {
+                                    ...x,
+                                    qty:
+                                      Math.ceil(
+                                        Math.max(0, Number(e.target.value) || 0) / BATCH_SIZE,
+                                      ) * BATCH_SIZE,
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                        className="h-12 w-20 shrink-0 text-center font-display text-lg"
+                        aria-label={`${d.flavour_name} trays`}
+                      />
+
+                      <button
+                        type="button"
+                        aria-label={`Remove ${d.flavour_name}`}
+                        onClick={() =>
+                          setDraft((prev) =>
+                            (prev ?? []).filter((x) => x.flavour_id !== d.flavour_id),
+                          )
+                        }
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+
+                    {weekly && draftDays.length > 1 ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Day</span>
+                        {draftDays.map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() =>
+                              setDraft((prev) =>
+                                (prev ?? []).map((x) =>
+                                  x.flavour_id === d.flavour_id ? { ...x, day: n } : x,
+                                ),
+                              )
                             }
-                          : x,
-                      ),
-                    )
-                  }
-                  className="h-12 w-20 shrink-0 text-center font-display text-lg"
-                  aria-label={`${d.flavour_name} trays`}
-                />
+                            className={`size-8 rounded-full text-sm font-semibold ${
+                              d.day === n
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
 
-                <button
-                  type="button"
-                  aria-label={`Remove ${d.flavour_name}`}
-                  onClick={() =>
-                    setDraft((prev) => (prev ?? []).filter((x) => x.flavour_id !== d.flavour_id))
-                  }
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-
-              <Textarea
-                value={d.note}
-                onChange={(e) =>
-                  setDraft((prev) =>
-                    (prev ?? []).map((x) =>
-                      x.flavour_id === d.flavour_id ? { ...x, note: e.target.value } : x,
-                    ),
-                  )
-                }
-                placeholder="Notes for the ice-cream makers…"
-                rows={2}
-                className="min-h-11 resize-y rounded-xl text-sm"
-                aria-label={`${d.flavour_name} production notes`}
-              />
-            </div>
-
-          ))}
+                    <Textarea
+                      value={d.note}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          (prev ?? []).map((x) =>
+                            x.flavour_id === d.flavour_id ? { ...x, note: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      placeholder="Notes for the ice-cream makers…"
+                      rows={2}
+                      className="min-h-11 resize-y rounded-xl text-sm"
+                      aria-label={`${d.flavour_name} production notes`}
+                    />
+                  </div>
+                ))}
+              </section>
+            );
+          })}
 
           <AddFlavourSearch
             remaining={remaining}
@@ -206,6 +292,15 @@ function ProductionPage() {
                   qty: BATCH_SIZE,
                   reason: "Added manually",
                   note: "",
+                  day: f.category === "sorbetto" ? sorbettoDay : 1,
+                  group:
+                    f.category === "sorbetto"
+                      ? "sorbetto"
+                      : f.contains_gluten
+                        ? "gluten"
+                        : f.contains_nuts
+                          ? "nuts"
+                          : "plain",
                 },
               ])
             }
@@ -220,7 +315,11 @@ function ProductionPage() {
             <Button
               className="h-16 flex-1 rounded-2xl text-lg"
               disabled={draft.filter((d) => d.qty > 0).length === 0 || createReport.isPending}
-              onClick={() => createReport.mutate(draft.filter((d) => d.qty > 0))}
+              onClick={() =>
+                createReport.mutate(
+                  draft.filter((d) => d.qty > 0).sort((a, b) => a.day - b.day),
+                )
+              }
             >
               Start production report
             </Button>
@@ -232,34 +331,75 @@ function ProductionPage() {
 
   // ---- suggestion view ----
   const pastReports = (reports.data ?? []).filter((r) => r.status === "completed");
+  const totalTrays = scheduled.reduce((t, s) => t + s.qty, 0);
+  const dayList = Array.from({ length: days }, (_, i) => i + 1);
 
   return (
-    <AppShell title="Production Report" subtitle="What to make next">
+    <AppShell title="Production Report" subtitle={weekly ? "This week's plan" : "What to make next"}>
       <div className="surface mb-4 flex items-start gap-3 p-4">
         <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" />
         <p className="text-sm">
           Based on recent sales, wholesale orders still to go out and your{" "}
-          <strong>{season.data ?? "mid"} season</strong> minimums, this is what we think you'll
-          need — {suggestions.reduce((t, s) => t + s.qty, 0)} of the{" "}
-          {(capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data ?? "mid"]} trays in a{" "}
-          {season.data ?? "mid"} season production day, in batches of {BATCH_SIZE}.
+          <strong>{currentSeason} season</strong> minimums, this is what we think you'll need —{" "}
+          {totalTrays} trays
+          {weekly
+            ? ` over ${days} production ${days === 1 ? "day" : "days"} (${dayCapacity} trays a day)`
+            : ` in a ${dayCapacity}-tray production day`}
+          , in batches of {BATCH_SIZE}.
         </p>
       </div>
 
-
-      <div className="space-y-2">
-        {suggestions.map((s) => (
-          <div key={s.flavour_id} className="surface flex items-center gap-3 p-4">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-display text-base">{s.flavour_name}</span>
-              <span className="text-xs text-muted-foreground">{s.reason}</span>
-            </span>
-            <span className="rounded-full bg-primary px-3 py-1.5 font-display text-lg text-primary-foreground">
-              {s.qty}
-            </span>
+      {weekly ? (
+        <div className="surface mb-4 p-4">
+          <p className="font-display text-base">Which day are sorbetti made?</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            All sorbetti run together on the same day.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {dayList.map((n) => (
+              <Button
+                key={n}
+                variant={sorbettoDay === n ? "default" : "outline"}
+                className="h-12 flex-1 rounded-xl"
+                onClick={() => setSorbettoDay(n)}
+              >
+                Day {n}
+              </Button>
+            ))}
           </div>
-        ))}
-        {suggestions.length === 0 ? (
+        </div>
+      ) : null}
+
+      <div className="space-y-4">
+        {dayList.map((day) => {
+          const items = scheduled.filter((s) => s.day === day);
+          if (items.length === 0) return null;
+          return (
+            <section key={day} className="space-y-2">
+              {weekly ? (
+                <h2 className="flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  <span>Day {day}</span>
+                  <span>{items.reduce((t, i) => t + i.qty, 0)} trays</span>
+                </h2>
+              ) : null}
+              {items.map((s) => (
+                <div key={s.flavour_id} className="surface flex items-center gap-3 p-4">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display text-base">{s.flavour_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {s.group !== "plain" ? `${GROUP_LABEL[s.group]} · ` : ""}
+                      {s.reason}
+                    </span>
+                  </span>
+                  <span className="rounded-full bg-primary px-3 py-1.5 font-display text-lg text-primary-foreground">
+                    {s.qty}
+                  </span>
+                </div>
+              ))}
+            </section>
+          );
+        })}
+        {scheduled.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Everything is at or above its minimum — nothing urgent to make.
           </p>
@@ -270,19 +410,21 @@ function ProductionPage() {
         className="mt-6 h-16 w-full rounded-2xl text-lg"
         onClick={() =>
           setDraft(
-            suggestions.map((s) => ({
+            scheduled.map((s) => ({
               flavour_id: s.flavour_id,
               flavour_name: s.flavour_name,
               qty: s.qty,
               reason: s.reason,
               note: "",
-
+              day: s.day,
+              group: s.group,
             })),
           )
         }
       >
         Review &amp; create report
       </Button>
+
 
       {pastReports.length > 0 ? (
         <section className="mt-8">
@@ -312,8 +454,20 @@ function AddFlavourSearch({
   remaining,
   onAdd,
 }: {
-  remaining: { id: string; name: string; category?: string | null }[];
-  onAdd: (f: { id: string; name: string; category?: string | null }) => void;
+  remaining: {
+    id: string;
+    name: string;
+    category?: string | null;
+    contains_gluten?: boolean | null;
+    contains_nuts?: boolean | null;
+  }[];
+  onAdd: (f: {
+    id: string;
+    name: string;
+    category?: string | null;
+    contains_gluten?: boolean | null;
+    contains_nuts?: boolean | null;
+  }) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -452,17 +606,33 @@ function ActiveReport({
   });
 
   const outstanding = report.items.filter((i) => !i.done);
+  const dayNumbers = Array.from(new Set(report.items.map((i) => i.day_index ?? 1))).sort(
+    (a, b) => a - b,
+  );
+  const multiDay = dayNumbers.length > 1;
 
   return (
     <AppShell
       title="Active Production Report"
-      subtitle={`${outstanding.length} of ${report.items.length} left · ${season} season`}
+      subtitle={`${outstanding.length} of ${report.items.length} left · ${season} season${
+        multiDay ? ` · ${dayNumbers.length}-day week` : ""
+      }`}
     >
-      <div className="space-y-2">
-        {report.items.map((i) => {
+      <div className="space-y-4">
+        {dayNumbers.map((day) => (
+          <section key={day} className="space-y-2">
+            {multiDay ? (
+              <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Day {day}
+              </h2>
+            ) : null}
+            {report.items
+              .filter((i) => (i.day_index ?? 1) === day)
+              .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           return (
             <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
+
               <div className="flex items-center gap-3">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-base">{i.flavour_name}</span>
@@ -524,10 +694,12 @@ function ActiveReport({
                 />
               )}
             </div>
-
           );
-        })}
+              })}
+          </section>
+        ))}
       </div>
+
 
       <Button
         variant={outstanding.length === 0 ? "default" : "outline"}

@@ -352,6 +352,27 @@ function DataPage() {
                     }
                   />
                 </div>
+                <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2.5">
+                  <Label htmlFor="gluten">Contains gluten</Label>
+                  <Switch
+                    id="gluten"
+                    defaultChecked={editing.contains_gluten}
+                    onCheckedChange={(v) =>
+                      update.mutate({ id: editing.id, patch: { contains_gluten: v } })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2.5">
+                  <Label htmlFor="nuts">Contains nuts</Label>
+                  <Switch
+                    id="nuts"
+                    defaultChecked={editing.contains_nuts}
+                    onCheckedChange={(v) =>
+                      update.mutate({ id: editing.id, patch: { contains_nuts: v } })
+                    }
+                  />
+                </div>
+
 
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
