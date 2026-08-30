@@ -90,6 +90,8 @@ function ProductionPage() {
           flavour_name: i.flavour_name,
           suggested_qty: i.qty,
           reason: i.reason,
+          note: i.note.trim() || null,
+
           position: idx,
         })),
       );
