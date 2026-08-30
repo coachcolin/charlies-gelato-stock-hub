@@ -108,6 +108,17 @@ function DataPage() {
     },
   });
 
+  const capacities = useQuery({ queryKey: ["dayCapacities"], queryFn: fetchDayCapacities });
+  const capacityMut = useMutation({
+    mutationFn: ({ season: s, trays }: { season: Season; trays: number }) =>
+      setDayCapacity(s, trays),
+    onSuccess: () => {
+      refresh();
+      toast.success("Daily production run updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const list = useMemo(() => {
     const query = q.trim().toLowerCase();
     return (flavours.data ?? []).filter((f) => f.name.toLowerCase().includes(query));
