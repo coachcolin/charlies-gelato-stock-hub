@@ -77,12 +77,13 @@ function ProductionPage() {
       if (res.error) throw new Error(res.error.message);
       const id = res.data.id as string;
       const itemsRes = await db.from("production_report_items").insert(
-        items.map((i) => ({
+        items.map((i, idx) => ({
           report_id: id,
           flavour_id: i.flavour_id,
           flavour_name: i.flavour_name,
           suggested_qty: i.qty,
           reason: i.reason,
+          position: idx,
         })),
       );
       if (itemsRes.error) throw new Error(itemsRes.error.message);
