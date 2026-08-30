@@ -629,6 +629,7 @@ function ActiveReport({
   const qc = useQueryClient();
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const saveNote = useMutation({
     mutationFn: async ({ itemId, note }: { itemId: string; note: string }) => {
