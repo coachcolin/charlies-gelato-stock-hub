@@ -436,16 +436,30 @@ function ProductionPage() {
       ) : null}
 
       <div className="space-y-4">
-        {dayList.map((day) => {
-          const items = scheduled.filter((s) => s.day === day);
-          if (items.length === 0) return null;
+        {weekly && dayList.length > 1 ? (
+          <DayTabs
+            days={dayList}
+            selected={selectedDay}
+            onSelect={setSelectedDay}
+            trayTotals={Object.fromEntries(
+              dayList.map((day) => [
+                day,
+                scheduled.filter((s) => s.day === day).reduce((t, i) => t + i.qty, 0),
+              ]),
+            )}
+          />
+        ) : null}
+        {(() => {
+          const items =
+            weekly && dayList.length > 1
+              ? scheduled.filter((s) => s.day === selectedDay)
+              : scheduled;
           return (
-            <section key={day} className="space-y-2">
-              {weekly ? (
-                <h2 className="flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  <span>Day {day}</span>
-                  <span>{items.reduce((t, i) => t + i.qty, 0)} trays</span>
-                </h2>
+            <section className="space-y-2">
+              {weekly && dayList.length > 1 && items.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nothing scheduled on day {selectedDay}.
+                </p>
               ) : null}
               {items.map((s) => (
                 <div key={s.flavour_id} className="surface flex items-center gap-3 p-4">
@@ -463,7 +477,7 @@ function ProductionPage() {
               ))}
             </section>
           );
-        })}
+        })()}
         {scheduled.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Everything is at or above its minimum — nothing urgent to make.
