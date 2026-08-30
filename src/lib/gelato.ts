@@ -125,6 +125,45 @@ export async function setSeason(season: Season) {
   if (res.error) throw new Error(res.error.message);
 }
 
+/* ---------- production batch settings ---------- */
+
+/** Trays are always produced in multiples of this batch size. */
+export const BATCH_SIZE = 4;
+
+export type DayCapacities = Record<Season, number>;
+
+export const DEFAULT_DAY_CAPACITIES: DayCapacities = { low: 56, mid: 80, peak: 100 };
+
+const CAP_KEY: Record<Season, string> = {
+  low: "day_capacity_low",
+  mid: "day_capacity_mid",
+  peak: "day_capacity_peak",
+};
+
+export async function fetchDayCapacities(): Promise<DayCapacities> {
+  const res = await db
+    .from("app_settings")
+    .select("key,value")
+    .in("key", [CAP_KEY.low, CAP_KEY.mid, CAP_KEY.peak]);
+  if (res.error) throw new Error(res.error.message);
+  const out = { ...DEFAULT_DAY_CAPACITIES };
+  for (const row of res.data ?? []) {
+    const season = (Object.keys(CAP_KEY) as Season[]).find((s) => CAP_KEY[s] === row.key);
+    const n = Number(row.value);
+    if (season && Number.isFinite(n) && n > 0) out[season] = n;
+  }
+  return out;
+}
+
+export async function setDayCapacity(season: Season, trays: number) {
+  const res = await db.from("app_settings").upsert({
+    key: CAP_KEY[season],
+    value: String(trays),
+    updated_at: new Date().toISOString(),
+  });
+  if (res.error) throw new Error(res.error.message);
+}
+
 export async function applyMovements(
   lines: { flavour_id: string; qty: number }[],
   kind: MovementKind,
@@ -213,6 +252,7 @@ export function buildSuggestions(
   movements: Movement[],
   activeOrders: (WholesaleOrder & { items: WholesaleOrderItem[] })[],
   season: Season,
+  dayCapacity?: number,
 ): Suggestion[] {
   const cutoff = Date.now() - 14 * 86400000;
   const sold = new Map<string, number>();
@@ -234,7 +274,7 @@ export function buildSuggestions(
 
   const hasSales = [...sold.values()].some((v) => v > 0);
 
-  return flavours
+  const raw = flavours
     .filter((f) => f.active)
     .map((f) => {
       const twoWeek = sold.get(f.id) ?? 0;
@@ -268,4 +308,39 @@ export function buildSuggestions(
     })
     .filter((s) => s.qty > 0)
     .sort((a, b) => b.score - a.score);
+
+  // Batch rounding: multiples of 4, with priority flavours getting at least 8.
+  for (const s of raw) {
+    const min = s.priority ? BATCH_SIZE * 2 : BATCH_SIZE;
+    s.qty = Math.max(min, Math.ceil(s.qty / BATCH_SIZE) * BATCH_SIZE);
+  }
+
+  const capacity = dayCapacity ?? DEFAULT_DAY_CAPACITIES[season];
+  if (!capacity || capacity <= 0) return raw;
+
+  // Fit the plan to a day's production run, in whole batches.
+  const kept: Suggestion[] = [];
+  let total = 0;
+  for (const s of raw) {
+    const min = s.priority ? BATCH_SIZE * 2 : BATCH_SIZE;
+    const room = capacity - total;
+    if (room < min) continue;
+    const qty = Math.min(s.qty, Math.floor(room / BATCH_SIZE) * BATCH_SIZE);
+    s.qty = qty;
+    kept.push(s);
+    total += qty;
+  }
+
+  // Under capacity: top up the highest-priority flavours a batch at a time.
+  let guard = 0;
+  while (total + BATCH_SIZE <= capacity && kept.length > 0 && guard < 500) {
+    guard++;
+    for (const s of kept) {
+      if (total + BATCH_SIZE > capacity) break;
+      s.qty += BATCH_SIZE;
+      total += BATCH_SIZE;
+    }
+  }
+
+  return kept;
 }

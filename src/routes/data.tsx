@@ -15,7 +15,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { db, fetchFlavours, fetchSeason, setSeason, type Flavour, type Season } from "@/lib/gelato";
+import {
+  BATCH_SIZE,
+  DEFAULT_DAY_CAPACITIES,
+  db,
+  fetchDayCapacities,
+  fetchFlavours,
+  fetchSeason,
+  setDayCapacity,
+  setSeason,
+  type Flavour,
+  type Season,
+} from "@/lib/gelato";
 
 export const Route = createFileRoute("/data")({
   head: () => ({
@@ -99,6 +110,17 @@ function DataPage() {
     },
   });
 
+  const capacities = useQuery({ queryKey: ["dayCapacities"], queryFn: fetchDayCapacities });
+  const capacityMut = useMutation({
+    mutationFn: ({ season: s, trays }: { season: Season; trays: number }) =>
+      setDayCapacity(s, trays),
+    onSuccess: () => {
+      refresh();
+      toast.success("Daily production run updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const list = useMemo(() => {
     const query = q.trim().toLowerCase();
     return (flavours.data ?? []).filter((f) => f.name.toLowerCase().includes(query));
@@ -132,6 +154,39 @@ function DataPage() {
           ))}
         </div>
       </div>
+
+      <div className="surface mb-4 p-4">
+        <p className="font-display text-base">Daily production run</p>
+        <p className="mb-3 text-xs text-muted-foreground">
+          How many trays a production day makes in each season. The production report suggests this
+          many trays, always in batches of {BATCH_SIZE} (priority flavours at least {BATCH_SIZE * 2}).
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {SEASONS.map((s) => (
+            <div key={s.key}>
+              <Label className="text-xs text-muted-foreground">{s.label} season</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={BATCH_SIZE}
+                defaultValue={(capacities.data ?? DEFAULT_DAY_CAPACITIES)[s.key]}
+                key={`${s.key}-${(capacities.data ?? DEFAULT_DAY_CAPACITIES)[s.key]}`}
+                onFocus={(e) => e.currentTarget.select()}
+                onBlur={(e) => {
+                  const n = Number(e.currentTarget.value);
+                  const current = (capacities.data ?? DEFAULT_DAY_CAPACITIES)[s.key];
+                  if (Number.isFinite(n) && n > 0 && n !== current)
+                    capacityMut.mutate({ season: s.key, trays: Math.round(n) });
+                }}
+                className="h-12 rounded-xl text-center text-base"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+
 
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />

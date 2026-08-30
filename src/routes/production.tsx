@@ -8,8 +8,11 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  BATCH_SIZE,
+  DEFAULT_DAY_CAPACITIES,
   applyMovements,
   buildSuggestions,
+  fetchDayCapacities,
   db,
   fetchFlavours,
   fetchMovements,
@@ -48,6 +51,7 @@ function ProductionPage() {
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
   const season = useQuery({ queryKey: ["season"], queryFn: fetchSeason });
+  const capacities = useQuery({ queryKey: ["dayCapacities"], queryFn: fetchDayCapacities });
   const reports = useQuery({ queryKey: ["reports"], queryFn: fetchReports });
 
   const activeReport = (reports.data ?? []).find((r) => r.status === "active");
@@ -59,8 +63,9 @@ function ProductionPage() {
       movements.data,
       orders.data.filter((o) => o.status === "active"),
       season.data,
+      (capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data],
     );
-  }, [flavours.data, movements.data, orders.data, season.data]);
+  }, [flavours.data, movements.data, orders.data, season.data, capacities.data]);
 
   const createReport = useMutation({
     mutationFn: async (items: Draft[]) => {
@@ -118,6 +123,8 @@ function ProductionPage() {
               <Input
                 type="number"
                 inputMode="numeric"
+                step={BATCH_SIZE}
+                min={0}
                 value={d.qty}
                 onChange={(e) =>
                   setDraft((prev) =>
@@ -128,9 +135,25 @@ function ProductionPage() {
                     ),
                   )
                 }
+                onBlur={(e) =>
+                  setDraft((prev) =>
+                    (prev ?? []).map((x) =>
+                      x.flavour_id === d.flavour_id
+                        ? {
+                            ...x,
+                            qty:
+                              Math.ceil(
+                                (Math.max(0, Number(e.target.value) || 0)) / BATCH_SIZE,
+                              ) * BATCH_SIZE,
+                          }
+                        : x,
+                    ),
+                  )
+                }
                 className="h-12 w-20 shrink-0 text-center font-display text-lg"
                 aria-label={`${d.flavour_name} trays`}
               />
+
               <button
                 type="button"
                 aria-label={`Remove ${d.flavour_name}`}
@@ -157,7 +180,7 @@ function ProductionPage() {
                   {
                     flavour_id: f.id,
                     flavour_name: f.name,
-                    qty: 1,
+                    qty: BATCH_SIZE,
                     reason: "Added manually",
                   },
                 ]);
@@ -201,9 +224,12 @@ function ProductionPage() {
         <p className="text-sm">
           Based on recent sales, wholesale orders still to go out and your{" "}
           <strong>{season.data ?? "mid"} season</strong> minimums, this is what we think you'll
-          need.
+          need — {suggestions.reduce((t, s) => t + s.qty, 0)} of the{" "}
+          {(capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data ?? "mid"]} trays in a{" "}
+          {season.data ?? "mid"} season production day, in batches of {BATCH_SIZE}.
         </p>
       </div>
+
 
       <div className="space-y-2">
         {suggestions.map((s) => (
