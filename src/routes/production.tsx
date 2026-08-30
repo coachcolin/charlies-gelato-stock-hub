@@ -57,6 +57,47 @@ type Draft = {
   group: AllergenGroup;
 };
 
+function DayTabs({
+  days,
+  selected,
+  onSelect,
+  trayTotals,
+}: {
+  days: number[];
+  selected: number;
+  onSelect: (day: number) => void;
+  trayTotals?: Record<number, number>;
+}) {
+  return (
+    <div className="surface flex gap-1 rounded-2xl p-1">
+      {days.map((day) => {
+        const active = day === selected;
+        return (
+          <button
+            key={day}
+            type="button"
+            onClick={() => onSelect(day)}
+            className={`flex h-12 flex-1 flex-col items-center justify-center rounded-xl transition-colors ${
+              active
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <span className="font-display text-sm leading-tight">Day {day}</span>
+            {trayTotals ? (
+              <span
+                className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-muted-foreground"}`}
+              >
+                {trayTotals[day] ?? 0} trays
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProductionPage() {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft[] | null>(null);
