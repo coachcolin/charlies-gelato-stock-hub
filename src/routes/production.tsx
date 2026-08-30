@@ -317,7 +317,18 @@ function AddFlavourSearch({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
   const normalized = query.trim().toLowerCase();
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
   const filtered = normalized
     ? remaining
         .filter((f) => f.name.toLowerCase().includes(normalized))
