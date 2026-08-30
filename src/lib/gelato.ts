@@ -252,6 +252,7 @@ export function buildSuggestions(
   movements: Movement[],
   activeOrders: (WholesaleOrder & { items: WholesaleOrderItem[] })[],
   season: Season,
+  dayCapacity?: number,
 ): Suggestion[] {
   const cutoff = Date.now() - 14 * 86400000;
   const sold = new Map<string, number>();
