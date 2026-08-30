@@ -691,6 +691,15 @@ function ActiveReport({
     (a, b) => a - b,
   );
   const multiDay = dayNumbers.length > 1;
+  const activeDay = selectedDay ?? dayNumbers[0] ?? 1;
+  const dayTrayTotals = Object.fromEntries(
+    dayNumbers.map((day) => [
+      day,
+      report.items
+        .filter((i) => (i.day_index ?? 1) === day)
+        .reduce((t, i) => t + i.suggested_qty, 0),
+    ]),
+  );
 
   return (
     <AppShell
@@ -700,16 +709,18 @@ function ActiveReport({
       }`}
     >
       <div className="space-y-4">
-        {dayNumbers.map((day) => (
-          <section key={day} className="space-y-2">
-            {multiDay ? (
-              <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Day {day}
-              </h2>
-            ) : null}
-            {report.items
-              .filter((i) => (i.day_index ?? 1) === day)
-              .map((i) => {
+        {multiDay ? (
+          <DayTabs
+            days={dayNumbers}
+            selected={activeDay}
+            onSelect={setSelectedDay}
+            trayTotals={dayTrayTotals}
+          />
+        ) : null}
+        <section className="space-y-2">
+          {report.items
+            .filter((i) => (multiDay ? (i.day_index ?? 1) === activeDay : true))
+            .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           return (
             <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
