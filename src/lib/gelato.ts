@@ -449,15 +449,18 @@ export function scheduleWeek(
     group: allergenGroup(s),
   }));
 
+  const used = (i: number) => buckets[i]?.used ?? Infinity;
+
   const place = (item: ScheduledSuggestion, index: number) => {
     const b = buckets[index];
+    if (!b) return;
     item.day = index + 1;
     b.items.push(item);
     b.used += item.qty;
   };
 
   const roomiest = () =>
-    buckets.reduce((best, b, i) => (b.used < buckets[best].used ? i : best), 0);
+    buckets.reduce((best, b, i) => (b.used < used(best) ? i : best), 0);
 
   const byGroup = (g: AllergenGroup) => tagged.filter((t) => t.group === g);
 
@@ -474,9 +477,9 @@ export function scheduleWeek(
     if (target < 0) target = roomiest();
     for (const item of items) {
       let idx = target;
-      if (buckets[idx].used + item.qty > cap) {
+      if (used(idx) + item.qty > cap) {
         const alt = roomiest();
-        if (buckets[alt].used + item.qty <= cap) idx = alt;
+        if (used(alt) + item.qty <= cap) idx = alt;
       }
       place(item, idx);
     }
