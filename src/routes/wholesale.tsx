@@ -138,12 +138,28 @@ function WholesalePage() {
           setPending(parsed.orders);
         }}
       />
-      <Button
-        className="mb-5 h-16 w-full rounded-2xl text-lg"
-        onClick={() => fileRef.current?.click()}
-      >
-        <Upload className="mr-2 size-5" /> Import order (CSV)
-      </Button>
+      <div className="mb-5 flex gap-2">
+        <Button
+          className="h-16 flex-1 rounded-2xl text-lg"
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="mr-2 size-5" /> Import order (CSV)
+        </Button>
+        <Button
+          variant="outline"
+          className="h-16 flex-1 rounded-2xl text-lg"
+          onClick={() => setManualOpen(true)}
+        >
+          <Plus className="mr-2 size-5" /> Enter order
+        </Button>
+      </div>
+
+      <ManualOrderDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        flavours={flavours.data ?? []}
+        onSaved={() => qc.invalidateQueries()}
+      />
 
       <Dialog open={Boolean(pending)} onOpenChange={(o) => !o && setPending(null)}>
         <DialogContent className="rounded-2xl">
