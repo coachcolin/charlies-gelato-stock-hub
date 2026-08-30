@@ -90,7 +90,8 @@ export type ProductionItem = {
   produced_qty: number | null;
   done: boolean;
   reason: string | null;
-  position: number;
+  note: string | null;
+
 };
 
 const db = supabase as unknown as {
