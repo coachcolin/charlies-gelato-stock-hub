@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Database,
   FileSpreadsheet,
+  IceCreamCone,
   Minus,
   PencilRuler,
   Plus,
