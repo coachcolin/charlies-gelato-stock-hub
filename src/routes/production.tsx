@@ -206,16 +206,34 @@ function ProductionPage() {
         }
       >
         <div className="space-y-4 pb-28">
-          {draftDays.map((day) => {
-            const items = draft.filter((d) => d.day === day);
-            if (items.length === 0) return null;
+          {weekly && draftDays.length > 1 ? (
+            <DayTabs
+              days={draftDays}
+              selected={selectedDay}
+              onSelect={setSelectedDay}
+              trayTotals={Object.fromEntries(
+                draftDays.map((day) => [
+                  day,
+                  draft.filter((d) => d.day === day).reduce((t, i) => t + i.qty, 0),
+                ]),
+              )}
+            />
+          ) : null}
+          {[
+            {
+              day: weekly && draftDays.length > 1 ? selectedDay : draftDays[0],
+              items:
+                weekly && draftDays.length > 1
+                  ? draft.filter((d) => d.day === selectedDay)
+                  : draft,
+            },
+          ].map(({ day, items }) => {
             return (
               <section key={day} className="space-y-2">
-                {weekly ? (
-                  <h2 className="flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    <span>Day {day}</span>
-                    <span>{items.reduce((t, i) => t + i.qty, 0)} trays</span>
-                  </h2>
+                {items.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Nothing on day {day} yet.
+                  </p>
                 ) : null}
                 {items.map((d) => (
                   <div key={d.flavour_id} className="surface space-y-3 p-4">
