@@ -25,6 +25,8 @@ export type Flavour = {
   desired_peak: number;
   desired_mid: number;
   desired_low: number;
+  contains_gluten: boolean;
+  contains_nuts: boolean;
 };
 
 export type Freezer = {
