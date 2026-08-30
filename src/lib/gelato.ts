@@ -268,6 +268,9 @@ export type Suggestion = {
   priority: boolean;
   belowMin?: boolean;
   score: number;
+  category: FlavourCategory;
+  contains_gluten: boolean;
+  contains_nuts: boolean;
 };
 
 /** The production engine: current stock vs 2-week sales trend, committed wholesale orders and desired season levels. */
