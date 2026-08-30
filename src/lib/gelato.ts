@@ -125,6 +125,45 @@ export async function setSeason(season: Season) {
   if (res.error) throw new Error(res.error.message);
 }
 
+/* ---------- production batch settings ---------- */
+
+/** Trays are always produced in multiples of this batch size. */
+export const BATCH_SIZE = 4;
+
+export type DayCapacities = Record<Season, number>;
+
+export const DEFAULT_DAY_CAPACITIES: DayCapacities = { low: 56, mid: 80, peak: 100 };
+
+const CAP_KEY: Record<Season, string> = {
+  low: "day_capacity_low",
+  mid: "day_capacity_mid",
+  peak: "day_capacity_peak",
+};
+
+export async function fetchDayCapacities(): Promise<DayCapacities> {
+  const res = await db
+    .from("app_settings")
+    .select("key,value")
+    .in("key", [CAP_KEY.low, CAP_KEY.mid, CAP_KEY.peak]);
+  if (res.error) throw new Error(res.error.message);
+  const out = { ...DEFAULT_DAY_CAPACITIES };
+  for (const row of res.data ?? []) {
+    const season = (Object.keys(CAP_KEY) as Season[]).find((s) => CAP_KEY[s] === row.key);
+    const n = Number(row.value);
+    if (season && Number.isFinite(n) && n > 0) out[season] = n;
+  }
+  return out;
+}
+
+export async function setDayCapacity(season: Season, trays: number) {
+  const res = await db.from("app_settings").upsert({
+    key: CAP_KEY[season],
+    value: String(trays),
+    updated_at: new Date().toISOString(),
+  });
+  if (res.error) throw new Error(res.error.message);
+}
+
 export async function applyMovements(
   lines: { flavour_id: string; qty: number }[],
   kind: MovementKind,
