@@ -243,6 +243,7 @@ export type Suggestion = {
   committed: number;
   desired: number;
   priority: boolean;
+  belowMin?: boolean;
   score: number;
 };
 
