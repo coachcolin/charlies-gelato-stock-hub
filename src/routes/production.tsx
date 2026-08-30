@@ -454,7 +454,13 @@ function AddFlavourSearch({
   remaining,
   onAdd,
 }: {
-  remaining: { id: string; name: string; category?: string | null }[];
+  remaining: {
+    id: string;
+    name: string;
+    category?: string | null;
+    contains_gluten?: boolean | null;
+    contains_nuts?: boolean | null;
+  }[];
   onAdd: (f: { id: string; name: string; category?: string | null }) => void;
 }) {
   const [query, setQuery] = useState("");
