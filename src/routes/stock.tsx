@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  categoryLabel,
   desiredFor,
   fetchFlavours,
   fetchFreezers,
@@ -165,8 +166,8 @@ function StockPage() {
                     <Star className="size-3.5 shrink-0 fill-primary text-primary" />
                   ) : null}
                 </span>
-                <span className="text-xs font-medium text-muted-foreground capitalize">
-                  {f.category} · min recommended {min}
+                <span className="text-xs font-medium text-muted-foreground">
+                  {categoryLabel(f.category)} · min recommended {min}
                   {below ? " · below minimum" : watch ? " · watch" : ""}
                 </span>
               </span>

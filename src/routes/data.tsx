@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   BATCH_SIZE,
+  categoryLabel,
   DEFAULT_DAY_CAPACITIES,
   db,
   fetchDayCapacities,
@@ -219,7 +220,7 @@ function DataPage() {
                 {f.priority ? <Star className="size-3.5 fill-primary text-primary" /> : null}
               </span>
               <span className="text-xs text-muted-foreground">
-                {f.category === "sorbetto" ? "Sorbetto" : "Gelato"} · min{" "}
+                {categoryLabel(f.category)} · min{" "}
                 {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
               </span>
             </span>
@@ -312,6 +313,7 @@ function DataPage() {
                       [
                         ["gelato", "Gelato"],
                         ["sorbetto", "Sorbetto"],
+                        ["special", "Specials / Seasonals"],
                       ] as const
                     ).map(([value, label]) => (
                       <Button

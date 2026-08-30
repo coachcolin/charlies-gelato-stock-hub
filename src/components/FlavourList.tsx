@@ -2,7 +2,7 @@ import { Search, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
-import type { Flavour } from "@/lib/gelato";
+import { categoryLabel, type Flavour } from "@/lib/gelato";
 
 export function FlavourList({
   flavours,
@@ -102,7 +102,7 @@ function FlavourButton({
           <span className="truncate font-display text-base">{f.name}</span>
           {f.priority ? <Star className="size-3.5 shrink-0 fill-primary text-primary" /> : null}
         </span>
-        <span className="text-xs font-medium text-muted-foreground capitalize">{f.category}</span>
+        <span className="text-xs font-medium text-muted-foreground">{categoryLabel(f.category)}</span>
       </span>
       {meta}
     </button>

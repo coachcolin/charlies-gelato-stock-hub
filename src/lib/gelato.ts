@@ -2,7 +2,17 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type Season = "peak" | "mid" | "low";
 
-export type FlavourCategory = "gelato" | "sorbetto";
+export type FlavourCategory = "gelato" | "sorbetto" | "special";
+
+export const CATEGORY_LABEL: Record<FlavourCategory, string> = {
+  gelato: "Gelato",
+  sorbetto: "Sorbetto",
+  special: "Specials / Seasonals",
+};
+
+export function categoryLabel(c: string) {
+  return CATEGORY_LABEL[c as FlavourCategory] ?? "Gelato";
+}
 
 export type Flavour = {
   id: string;
