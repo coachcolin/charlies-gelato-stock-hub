@@ -1,0 +1,1 @@
+ALTER TABLE public.production_report_items ADD COLUMN IF NOT EXISTS note text;
