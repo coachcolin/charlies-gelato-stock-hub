@@ -35,7 +35,9 @@ export const Route = createFileRoute("/wholesale")({
 function WholesalePage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [importing, setImporting] = useState(false);
+  const [pending, setPending] = useState<ParsedOrder[] | null>(null);
+  const [skipped, setSkipped] = useState(0);
+  const [dueDate, setDueDate] = useState("");
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
@@ -43,46 +45,60 @@ function WholesalePage() {
   const activeOrders = (orders.data ?? []).filter((o) => o.status === "active");
   const doneOrders = (orders.data ?? []).filter((o) => o.status === "completed");
 
-  const importOrder = useMutation({
-    mutationFn: async (file: File) => {
-      const text = await file.text();
-      const parsed = parseOrderCsv(text);
-      if (parsed.rows.length === 0)
-        throw new Error("Couldn't find any flavour/quantity rows in that file.");
+  const importOrders = useMutation({
+    mutationFn: async ({ list, due }: { list: ParsedOrder[]; due: string }) => {
       const known = flavours.data ?? [];
-      const items = parsed.rows.map((r) => {
-        const match = matchFlavour(r.name, known);
-        return {
-          flavour_id: match?.id ?? null,
-          flavour_name: match?.name ?? r.name,
-          qty: r.qty,
-        };
-      });
-      const orderRes = await db
-        .from("wholesale_orders")
-        .insert({
-          wholesaler: parsed.wholesaler ?? file.name.replace(/\.[^.]+$/, ""),
-          reference: parsed.reference,
-        })
-        .select("id")
-        .single();
-      if (orderRes.error) throw new Error(orderRes.error.message);
-      const orderId = orderRes.data.id as string;
-      const itemsRes = await db
-        .from("wholesale_order_items")
-        .insert(items.map((i) => ({ ...i, order_id: orderId })));
-      if (itemsRes.error) throw new Error(itemsRes.error.message);
-      const unmatched = items.filter((i) => !i.flavour_id).length;
-      return { count: items.length, unmatched };
+      const existingRefs = new Set(
+        (orders.data ?? []).map((o) => o.reference).filter(Boolean) as string[],
+      );
+      let created = 0;
+      let unmatched = 0;
+      let duplicates = 0;
+
+      for (const po of list) {
+        const ref = po.orderNumber ?? po.reference;
+        if (ref && existingRefs.has(ref)) {
+          duplicates++;
+          continue;
+        }
+        const items = po.rows.map((r) => {
+          const match = matchFlavour(r.name, known);
+          if (!match) unmatched++;
+          return {
+            flavour_id: match?.id ?? null,
+            flavour_name: match?.name ?? r.name,
+            qty: r.qty,
+          };
+        });
+        const orderRes = await db
+          .from("wholesale_orders")
+          .insert({
+            wholesaler: po.customer,
+            reference: ref,
+            is_future: true,
+            send_date: due,
+          })
+          .select("id")
+          .single();
+        if (orderRes.error) throw new Error(orderRes.error.message);
+        const itemsRes = await db
+          .from("wholesale_order_items")
+          .insert(items.map((i) => ({ ...i, order_id: orderRes.data.id as string })));
+        if (itemsRes.error) throw new Error(itemsRes.error.message);
+        created++;
+      }
+      return { created, unmatched, duplicates };
     },
     onSuccess: (r) => {
       qc.invalidateQueries();
+      setPending(null);
       toast.success(
-        `Imported ${r.count} lines${r.unmatched ? ` · ${r.unmatched} need matching` : ""}`,
+        `Imported ${r.created} order${r.created === 1 ? "" : "s"}` +
+          (r.unmatched ? ` · ${r.unmatched} lines need matching` : "") +
+          (r.duplicates ? ` · ${r.duplicates} already imported` : ""),
       );
     },
     onError: (e: Error) => toast.error(e.message),
-    onSettled: () => setImporting(false),
   });
 
   return (
@@ -92,21 +108,75 @@ function WholesalePage() {
         type="file"
         accept=".csv,.tsv,.txt,text/csv"
         className="hidden"
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
-          setImporting(true);
-          importOrder.mutate(file);
+          const parsed = parseOrderCsv(await file.text());
+          if (parsed.orders.length === 0) {
+            toast.error(
+              parsed.skippedStatus
+                ? "No orders to import — every line was already delivered."
+                : "Couldn't find any flavour/quantity rows in that file.",
+            );
+            return;
+          }
+          setSkipped(parsed.skippedStatus);
+          setDueDate(
+            parsed.orders.find((o) => o.deliveryDate)?.deliveryDate ??
+              new Date().toISOString().slice(0, 10),
+          );
+          setPending(parsed.orders);
         }}
       />
       <Button
         className="mb-5 h-16 w-full rounded-2xl text-lg"
-        disabled={importing}
         onClick={() => fileRef.current?.click()}
       >
-        <Upload className="mr-2 size-5" /> {importing ? "Reading file…" : "Import order (CSV)"}
+        <Upload className="mr-2 size-5" /> Import order (CSV)
       </Button>
+
+      <Dialog open={Boolean(pending)} onOpenChange={(o) => !o && setPending(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              {pending?.length ?? 0} order{pending?.length === 1 ? "" : "s"} to import
+            </DialogTitle>
+            <DialogDescription>
+              Only orders marked Processing or Ordered are imported
+              {skipped ? ` · ${skipped} delivered lines skipped` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-52 space-y-1 overflow-y-auto text-sm">
+            {(pending ?? []).map((o) => (
+              <p key={o.orderNumber ?? o.customer} className="flex justify-between gap-3">
+                <span className="truncate">{o.customer}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {o.rows.reduce((s, r) => s + r.qty, 0)} trays
+                </span>
+              </p>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="due-date">Due date</Label>
+            <Input
+              id="due-date"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="h-12"
+            />
+          </div>
+          <Button
+            className="h-14 w-full rounded-2xl text-base"
+            disabled={!dueDate || importOrders.isPending}
+            onClick={() => pending && importOrders.mutate({ list: pending, due: dueDate })}
+          >
+            {importOrders.isPending ? "Importing…" : "Import orders"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
 
       <Tabs defaultValue="active">
         <TabsList className="mb-4 grid h-12 w-full grid-cols-2 rounded-2xl">
