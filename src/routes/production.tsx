@@ -336,7 +336,7 @@ function AddFlavourSearch({
     : remaining.slice(0, 8);
 
   return (
-    <div className="surface relative p-3">
+    <div ref={ref} className="surface relative p-3">
       <div className="flex items-center gap-2">
         <Plus className="size-4 text-muted-foreground" />
         <Input
