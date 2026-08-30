@@ -6,11 +6,19 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { matchFlavour, parseOrderCsv } from "@/lib/csv";
+import { matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
+
 import { applyMovements, db, fetchFlavours, fetchOrders, type Flavour } from "@/lib/gelato";
 
 export const Route = createFileRoute("/wholesale")({
