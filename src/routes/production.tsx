@@ -122,6 +122,8 @@ function ProductionPage() {
               <Input
                 type="number"
                 inputMode="numeric"
+                step={BATCH_SIZE}
+                min={0}
                 value={d.qty}
                 onChange={(e) =>
                   setDraft((prev) =>
@@ -132,9 +134,25 @@ function ProductionPage() {
                     ),
                   )
                 }
+                onBlur={(e) =>
+                  setDraft((prev) =>
+                    (prev ?? []).map((x) =>
+                      x.flavour_id === d.flavour_id
+                        ? {
+                            ...x,
+                            qty:
+                              Math.ceil(
+                                (Math.max(0, Number(e.target.value) || 0)) / BATCH_SIZE,
+                              ) * BATCH_SIZE,
+                          }
+                        : x,
+                    ),
+                  )
+                }
                 className="h-12 w-20 shrink-0 text-center font-display text-lg"
                 aria-label={`${d.flavour_name} trays`}
               />
+
               <button
                 type="button"
                 aria-label={`Remove ${d.flavour_name}`}
