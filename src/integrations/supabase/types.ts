@@ -114,6 +114,7 @@ export type Database = {
           flavour_id: string | null
           flavour_name: string
           id: string
+          position: number
           produced_qty: number | null
           reason: string | null
           report_id: string
@@ -125,6 +126,7 @@ export type Database = {
           flavour_id?: string | null
           flavour_name: string
           id?: string
+          position?: number
           produced_qty?: number | null
           reason?: string | null
           report_id: string
@@ -136,6 +138,7 @@ export type Database = {
           flavour_id?: string | null
           flavour_name?: string
           id?: string
+          position?: number
           produced_qty?: number | null
           reason?: string | null
           report_id?: string

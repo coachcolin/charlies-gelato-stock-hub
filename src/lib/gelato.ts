@@ -80,6 +80,7 @@ export type ProductionItem = {
   produced_qty: number | null;
   done: boolean;
   reason: string | null;
+  position: number;
 };
 
 const db = supabase as unknown as {
@@ -198,7 +199,9 @@ export async function fetchReports(): Promise<
   const reports = unwrap<ProductionReport[]>(
     await db.from("production_reports").select("*").order("created_at", { ascending: false }),
   );
-  const items = unwrap<ProductionItem[]>(await db.from("production_report_items").select("*"));
+  const items = unwrap<ProductionItem[]>(
+    await db.from("production_report_items").select("*").order("position"),
+  );
   return reports.map((r) => ({ ...r, items: items.filter((i) => i.report_id === r.id) }));
 }
 
