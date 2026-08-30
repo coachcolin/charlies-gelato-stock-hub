@@ -15,7 +15,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { db, fetchFlavours, fetchSeason, setSeason, type Flavour, type Season } from "@/lib/gelato";
+import {
+  db,
+  fetchDayCapacities,
+  fetchFlavours,
+  fetchSeason,
+  setDayCapacity,
+  setSeason,
+  type Flavour,
+  type Season,
+} from "@/lib/gelato";
 
 export const Route = createFileRoute("/data")({
   head: () => ({
