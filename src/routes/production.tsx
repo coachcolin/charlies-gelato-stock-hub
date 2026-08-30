@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  BATCH_SIZE,
   DEFAULT_DAY_CAPACITIES,
   applyMovements,
   buildSuggestions,
@@ -179,7 +180,7 @@ function ProductionPage() {
                   {
                     flavour_id: f.id,
                     flavour_name: f.name,
-                    qty: 1,
+                    qty: BATCH_SIZE,
                     reason: "Added manually",
                   },
                 ]);
