@@ -606,17 +606,33 @@ function ActiveReport({
   });
 
   const outstanding = report.items.filter((i) => !i.done);
+  const dayNumbers = Array.from(new Set(report.items.map((i) => i.day_index ?? 1))).sort(
+    (a, b) => a - b,
+  );
+  const multiDay = dayNumbers.length > 1;
 
   return (
     <AppShell
       title="Active Production Report"
-      subtitle={`${outstanding.length} of ${report.items.length} left · ${season} season`}
+      subtitle={`${outstanding.length} of ${report.items.length} left · ${season} season${
+        multiDay ? ` · ${dayNumbers.length}-day week` : ""
+      }`}
     >
-      <div className="space-y-2">
-        {report.items.map((i) => {
+      <div className="space-y-4">
+        {dayNumbers.map((day) => (
+          <section key={day} className="space-y-2">
+            {multiDay ? (
+              <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Day {day}
+              </h2>
+            ) : null}
+            {report.items
+              .filter((i) => (i.day_index ?? 1) === day)
+              .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           return (
             <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
+
               <div className="flex items-center gap-3">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-base">{i.flavour_name}</span>
