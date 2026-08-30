@@ -46,6 +46,7 @@ function WholesalePage() {
   const [pending, setPending] = useState<ParsedOrder[] | null>(null);
   const [skipped, setSkipped] = useState(0);
   const [dueDate, setDueDate] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
