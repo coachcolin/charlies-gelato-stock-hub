@@ -102,6 +102,7 @@ function ProductionPage() {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft[] | null>(null);
   const [sorbettoDay, setSorbettoDay] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(1);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
