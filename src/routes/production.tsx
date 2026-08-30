@@ -788,8 +788,7 @@ function ActiveReport({
             </div>
           );
               })}
-          </section>
-        ))}
+        </section>
       </div>
 
 
