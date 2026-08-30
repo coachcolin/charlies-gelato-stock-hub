@@ -352,7 +352,12 @@ function ProductionPage() {
                   qty: BATCH_SIZE,
                   reason: "Added manually",
                   note: "",
-                  day: f.category === "sorbetto" ? sorbettoDay : 1,
+                  day:
+                    f.category === "sorbetto"
+                      ? sorbettoDay
+                      : weekly && draftDays.length > 1
+                        ? selectedDay
+                        : 1,
                   group:
                     f.category === "sorbetto"
                       ? "sorbetto"
