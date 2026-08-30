@@ -274,7 +274,7 @@ export function buildSuggestions(
 
   const hasSales = [...sold.values()].some((v) => v > 0);
 
-  return flavours
+  const raw = flavours
     .filter((f) => f.active)
     .map((f) => {
       const twoWeek = sold.get(f.id) ?? 0;
@@ -308,4 +308,39 @@ export function buildSuggestions(
     })
     .filter((s) => s.qty > 0)
     .sort((a, b) => b.score - a.score);
+
+  // Batch rounding: multiples of 4, with priority flavours getting at least 8.
+  for (const s of raw) {
+    const min = s.priority ? BATCH_SIZE * 2 : BATCH_SIZE;
+    s.qty = Math.max(min, Math.ceil(s.qty / BATCH_SIZE) * BATCH_SIZE);
+  }
+
+  const capacity = dayCapacity ?? DEFAULT_DAY_CAPACITIES[season];
+  if (!capacity || capacity <= 0) return raw;
+
+  // Fit the plan to a day's production run, in whole batches.
+  const kept: Suggestion[] = [];
+  let total = 0;
+  for (const s of raw) {
+    const min = s.priority ? BATCH_SIZE * 2 : BATCH_SIZE;
+    const room = capacity - total;
+    if (room < min) continue;
+    const qty = Math.min(s.qty, Math.floor(room / BATCH_SIZE) * BATCH_SIZE);
+    s.qty = qty;
+    kept.push(s);
+    total += qty;
+  }
+
+  // Under capacity: top up the highest-priority flavours a batch at a time.
+  let guard = 0;
+  while (total + BATCH_SIZE <= capacity && kept.length > 0 && guard < 500) {
+    guard++;
+    for (const s of kept) {
+      if (total + BATCH_SIZE > capacity) break;
+      s.qty += BATCH_SIZE;
+      total += BATCH_SIZE;
+    }
+  }
+
+  return kept;
 }
