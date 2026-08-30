@@ -60,6 +60,7 @@ type Draft = {
 function ProductionPage() {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft[] | null>(null);
+  const [sorbettoDay, setSorbettoDay] = useState(1);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
@@ -70,22 +71,43 @@ function ProductionPage() {
 
   const activeReport = (reports.data ?? []).find((r) => r.status === "active");
 
-  const suggestions: Suggestion[] = useMemo(() => {
-    if (!flavours.data || !movements.data || !orders.data || !season.data) return [];
-    return buildSuggestions(
+  const currentSeason = season.data ?? "mid";
+  const dayCapacity = (capacities.data ?? DEFAULT_DAY_CAPACITIES)[currentSeason];
+
+  const { scheduled, days } = useMemo(() => {
+    if (!flavours.data || !movements.data || !orders.data || !season.data)
+      return { scheduled: [] as ScheduledSuggestion[], days: 1 };
+    const activeOrders = orders.data.filter((o) => o.status === "active");
+    // Uncapped first, so we know how big the week needs to be.
+    const uncapped = buildSuggestions(
       flavours.data,
       movements.data,
-      orders.data.filter((o) => o.status === "active"),
+      activeOrders,
       season.data,
-      (capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data],
+      0,
     );
-  }, [flavours.data, movements.data, orders.data, season.data, capacities.data]);
+    const needed = uncapped.reduce((t, s) => t + s.qty, 0);
+    const dayCount = recommendedDays(needed, dayCapacity, season.data);
+    const fitted = buildSuggestions(
+      flavours.data,
+      movements.data,
+      activeOrders,
+      season.data,
+      dayCapacity * dayCount,
+    );
+    return {
+      scheduled: scheduleWeek(fitted, dayCount, dayCapacity, sorbettoDay),
+      days: dayCount,
+    };
+  }, [flavours.data, movements.data, orders.data, season.data, dayCapacity, sorbettoDay]);
+
+  const weekly = isWeeklySeason(currentSeason);
 
   const createReport = useMutation({
     mutationFn: async (items: Draft[]) => {
       const res = await db
         .from("production_reports")
-        .insert({ season: season.data ?? "mid" })
+        .insert({ season: currentSeason, days, sorbetto_day: sorbettoDay })
         .select("id")
         .single();
       if (res.error) throw new Error(res.error.message);
@@ -98,7 +120,7 @@ function ProductionPage() {
           suggested_qty: i.qty,
           reason: i.reason,
           note: i.note.trim() || null,
-
+          day_index: i.day,
           position: idx,
         })),
       );
