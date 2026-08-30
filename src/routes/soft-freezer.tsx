@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
-import { Check, IceCreamCone, Minus, Plus, Search } from "lucide-react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { Check, Minus, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,7 +15,8 @@ export const Route = createFileRoute("/soft-freezer")({
       { title: "Soft Freezer Order — Charlie's Gelato" },
       {
         name: "description",
-        content: "Top up the display cabinet freezers at Charlie's Gelato and log the trays out of stock.",
+        content:
+          "Top up the display cabinet freezers at Charlie's Gelato and log the trays out of stock.",
       },
       { property: "og:title", content: "Soft Freezer Order — Charlie's Gelato" },
       {
@@ -26,9 +27,6 @@ export const Route = createFileRoute("/soft-freezer")({
   }),
   component: SoftFreezerOrder,
 });
-
-// Imported late to avoid circular type issues — TanStack needs this at module scope.
-import { createFileRoute } from "@tanstack/react-router";
 
 type GroupKey = "gelato" | "sorbetto" | "allergen";
 
@@ -167,6 +165,3 @@ function SoftFreezerOrder() {
     </AppShell>
   );
 }
-
-// keep icon import referenced for tree-shaking clarity
-void IceCreamCone;

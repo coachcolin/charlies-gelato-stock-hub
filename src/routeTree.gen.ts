@@ -15,6 +15,7 @@ import { Route as DataRouteImport } from './routes/data'
 import { Route as EditStockRouteImport } from './routes/edit-stock'
 import { Route as ProductionRouteImport } from './routes/production'
 import { Route as RemoveRouteImport } from './routes/remove'
+import { Route as SoftFreezerRouteImport } from './routes/soft-freezer'
 import { Route as StockRouteImport } from './routes/stock'
 import { Route as WholesaleRouteImport } from './routes/wholesale'
 
@@ -48,6 +49,11 @@ const RemoveRoute = RemoveRouteImport.update({
   path: '/remove',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SoftFreezerRoute = SoftFreezerRouteImport.update({
+  id: '/soft-freezer',
+  path: '/soft-freezer',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StockRoute = StockRouteImport.update({
   id: '/stock',
   path: '/stock',
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/edit-stock': typeof EditStockRoute
   '/production': typeof ProductionRoute
   '/remove': typeof RemoveRoute
+  '/soft-freezer': typeof SoftFreezerRoute
   '/stock': typeof StockRoute
   '/wholesale': typeof WholesaleRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/edit-stock': typeof EditStockRoute
   '/production': typeof ProductionRoute
   '/remove': typeof RemoveRoute
+  '/soft-freezer': typeof SoftFreezerRoute
   '/stock': typeof StockRoute
   '/wholesale': typeof WholesaleRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/edit-stock': typeof EditStockRoute
   '/production': typeof ProductionRoute
   '/remove': typeof RemoveRoute
+  '/soft-freezer': typeof SoftFreezerRoute
   '/stock': typeof StockRoute
   '/wholesale': typeof WholesaleRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/edit-stock'
     | '/production'
     | '/remove'
+    | '/soft-freezer'
     | '/stock'
     | '/wholesale'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/edit-stock'
     | '/production'
     | '/remove'
+    | '/soft-freezer'
     | '/stock'
     | '/wholesale'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/edit-stock'
     | '/production'
     | '/remove'
+    | '/soft-freezer'
     | '/stock'
     | '/wholesale'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   EditStockRoute: typeof EditStockRoute
   ProductionRoute: typeof ProductionRoute
   RemoveRoute: typeof RemoveRoute
+  SoftFreezerRoute: typeof SoftFreezerRoute
   StockRoute: typeof StockRoute
   WholesaleRoute: typeof WholesaleRoute
 }
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RemoveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/soft-freezer': {
+      id: '/soft-freezer'
+      path: '/soft-freezer'
+      fullPath: '/soft-freezer'
+      preLoaderRoute: typeof SoftFreezerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/stock': {
       id: '/stock'
       path: '/stock'
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditStockRoute: EditStockRoute,
   ProductionRoute: ProductionRoute,
   RemoveRoute: RemoveRoute,
+  SoftFreezerRoute: SoftFreezerRoute,
   StockRoute: StockRoute,
   WholesaleRoute: WholesaleRoute,
 }
