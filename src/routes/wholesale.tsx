@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Trash2, Upload } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -46,6 +46,7 @@ function WholesalePage() {
   const [pending, setPending] = useState<ParsedOrder[] | null>(null);
   const [skipped, setSkipped] = useState(0);
   const [dueDate, setDueDate] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
@@ -137,12 +138,28 @@ function WholesalePage() {
           setPending(parsed.orders);
         }}
       />
-      <Button
-        className="mb-5 h-16 w-full rounded-2xl text-lg"
-        onClick={() => fileRef.current?.click()}
-      >
-        <Upload className="mr-2 size-5" /> Import order (CSV)
-      </Button>
+      <div className="mb-5 flex gap-2">
+        <Button
+          className="h-16 flex-1 rounded-2xl text-lg"
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="mr-2 size-5" /> Import order (CSV)
+        </Button>
+        <Button
+          variant="outline"
+          className="h-16 flex-1 rounded-2xl text-lg"
+          onClick={() => setManualOpen(true)}
+        >
+          <Plus className="mr-2 size-5" /> Enter order
+        </Button>
+      </div>
+
+      <ManualOrderDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        flavours={flavours.data ?? []}
+        onSaved={() => qc.invalidateQueries()}
+      />
 
       <Dialog open={Boolean(pending)} onOpenChange={(o) => !o && setPending(null)}>
         <DialogContent className="rounded-2xl">
@@ -431,5 +448,227 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
         </Button>
       </div>
     </div>
+  );
+}
+
+function ManualOrderDialog({
+  open,
+  onOpenChange,
+  flavours,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  flavours: Flavour[];
+  onSaved: () => void;
+}) {
+  const [customer, setCustomer] = useState("");
+  const [reference, setReference] = useState("");
+  const [query, setQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [picked, setPicked] = useState<{ flavour: Flavour; qty: number }[]>([]);
+  const [isFuture, setIsFuture] = useState(false);
+  const [sendDate, setSendDate] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setCustomer("");
+      setReference("");
+      setQuery("");
+      setPicked([]);
+      setIsFuture(false);
+      setSendDate("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  const pickedIds = new Set(picked.map((p) => p.flavour.id));
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return flavours
+      .filter((f) => f.active && !pickedIds.has(f.id))
+      .filter((f) => !q || f.name.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 8);
+  }, [flavours, query, pickedIds]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const orderRes = await db
+        .from("wholesale_orders")
+        .insert({
+          wholesaler: customer.trim(),
+          reference: reference.trim() || null,
+          is_future: isFuture,
+          send_date: isFuture && sendDate ? sendDate : null,
+        })
+        .select("id")
+        .single();
+      if (orderRes.error) throw new Error(orderRes.error.message);
+      const itemsRes = await db.from("wholesale_order_items").insert(
+        picked.map((p) => ({
+          order_id: orderRes.data.id as string,
+          flavour_id: p.flavour.id,
+          flavour_name: p.flavour.name,
+          qty: p.qty,
+        })),
+      );
+      if (itemsRes.error) throw new Error(itemsRes.error.message);
+    },
+    onSuccess: () => {
+      onSaved();
+      onOpenChange(false);
+      toast.success("Order added");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const totalTrays = picked.reduce((s, p) => s + p.qty, 0);
+  const canSave = customer.trim().length > 0 && picked.length > 0 && picked.every((p) => p.qty > 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">Enter order manually</DialogTitle>
+          <DialogDescription>
+            Add a wholesale order by hand — pick the customer, flavours and quantities.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-customer">Customer</Label>
+            <Input
+              id="manual-customer"
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              placeholder="e.g. Moore Wilson's"
+              className="h-12"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-ref">Reference (optional)</Label>
+            <Input
+              id="manual-ref"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Order # or PO"
+              className="h-12"
+            />
+          </div>
+
+          <div className="space-y-1.5" ref={wrapRef}>
+            <Label htmlFor="manual-flavour">Add flavours</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="manual-flavour"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setMenuOpen(true);
+                }}
+                onFocus={() => setMenuOpen(true)}
+                placeholder="Type a flavour…"
+                className="h-12 pl-9"
+              />
+            </div>
+            {menuOpen && matches.length > 0 ? (
+              <div className="surface max-h-52 overflow-y-auto rounded-xl p-1">
+                {matches.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setPicked((p) => [...p, { flavour: f, qty: 1 }]);
+                      setQuery("");
+                      setMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm hover:bg-muted"
+                  >
+                    {f.name}
+                    <Plus className="size-4 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {picked.length > 0 ? (
+            <div className="space-y-2">
+              {picked.map((p) => (
+                <div key={p.flavour.id} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {p.flavour.name}
+                  </span>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={p.qty}
+                    onChange={(e) =>
+                      setPicked((list) =>
+                        list.map((x) =>
+                          x.flavour.id === p.flavour.id
+                            ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
+                            : x,
+                        ),
+                      )
+                    }
+                    className="h-11 w-20 text-center font-display"
+                    aria-label={`${p.flavour.name} quantity`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPicked((list) => list.filter((x) => x.flavour.id !== p.flavour.id))
+                    }
+                    className="flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+                    aria-label={`Remove ${p.flavour.name}`}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted px-3 py-2.5">
+            <Label htmlFor="manual-future" className="text-sm">
+              Future order
+            </Label>
+            <Switch id="manual-future" checked={isFuture} onCheckedChange={setIsFuture} />
+            {isFuture ? (
+              <Input
+                type="date"
+                value={sendDate}
+                onChange={(e) => setSendDate(e.target.value)}
+                className="h-10 w-auto"
+                aria-label="Send date"
+              />
+            ) : null}
+          </div>
+
+          <Button
+            className="h-14 w-full rounded-2xl text-base"
+            disabled={!canSave || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            {save.isPending
+              ? "Saving…"
+              : `Save order${picked.length ? ` · ${totalTrays} trays` : ""}`}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
