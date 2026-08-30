@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Database,
   FileSpreadsheet,
+  IceCreamCone,
   Minus,
   PencilRuler,
   Plus,
@@ -47,6 +48,13 @@ const TILES = [
     hint: "Trays made & put away",
     icon: Plus,
     tone: "sky" as const,
+  },
+  {
+    to: "/soft-freezer",
+    label: "Soft Freezer Order",
+    hint: "Top up the display freezers",
+    icon: IceCreamCone,
+    tone: "cream" as const,
   },
   {
     to: "/stock",
