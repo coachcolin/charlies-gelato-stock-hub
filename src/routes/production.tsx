@@ -268,6 +268,8 @@ function ProductionPage() {
               flavour_name: s.flavour_name,
               qty: s.qty,
               reason: s.reason,
+              note: "",
+
             })),
           )
         }
