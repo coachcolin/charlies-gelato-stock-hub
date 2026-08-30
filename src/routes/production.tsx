@@ -333,6 +333,20 @@ function ActiveReport({
 }) {
   const qc = useQueryClient();
   const [qtys, setQtys] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  const saveNote = useMutation({
+    mutationFn: async ({ itemId, note }: { itemId: string; note: string }) => {
+      const res = await db
+        .from("production_report_items")
+        .update({ note: note.trim() || null })
+        .eq("id", itemId);
+      if (res.error) throw new Error(res.error.message);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
 
   const tick = useMutation({
     mutationFn: async ({
