@@ -216,7 +216,11 @@ export async function fetchReports(): Promise<
     await db.from("production_reports").select("*").order("created_at", { ascending: false }),
   );
   const items = unwrap<ProductionItem[]>(
-    await db.from("production_report_items").select("*").order("position"),
+    await db
+      .from("production_report_items")
+      .select("*")
+      .order("day_index")
+      .order("position"),
   );
   return reports.map((r) => ({ ...r, items: items.filter((i) => i.report_id === r.id) }));
 }
