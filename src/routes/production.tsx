@@ -224,9 +224,12 @@ function ProductionPage() {
         <p className="text-sm">
           Based on recent sales, wholesale orders still to go out and your{" "}
           <strong>{season.data ?? "mid"} season</strong> minimums, this is what we think you'll
-          need.
+          need — {suggestions.reduce((t, s) => t + s.qty, 0)} of the{" "}
+          {(capacities.data ?? DEFAULT_DAY_CAPACITIES)[season.data ?? "mid"]} trays in a{" "}
+          {season.data ?? "mid"} season production day, in batches of {BATCH_SIZE}.
         </p>
       </div>
+
 
       <div className="space-y-2">
         {suggestions.map((s) => (
