@@ -461,7 +461,13 @@ function AddFlavourSearch({
     contains_gluten?: boolean | null;
     contains_nuts?: boolean | null;
   }[];
-  onAdd: (f: { id: string; name: string; category?: string | null }) => void;
+  onAdd: (f: {
+    id: string;
+    name: string;
+    category?: string | null;
+    contains_gluten?: boolean | null;
+    contains_nuts?: boolean | null;
+  }) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
