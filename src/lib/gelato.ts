@@ -81,6 +81,8 @@ export type ProductionReport = {
   season: Season;
   created_at: string;
   completed_at: string | null;
+  days: number;
+  sorbetto_day: number;
 };
 
 export type ProductionItem = {
@@ -94,8 +96,7 @@ export type ProductionItem = {
   reason: string | null;
   note: string | null;
   position: number;
-
-
+  day_index: number;
 };
 
 const db = supabase as unknown as {
