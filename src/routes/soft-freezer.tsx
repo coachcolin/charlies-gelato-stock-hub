@@ -1,0 +1,172 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
+import { Check, IceCreamCone, Minus, Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import { AppShell } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { applyMovements, fetchFlavours, type Flavour } from "@/lib/gelato";
+
+export const Route = createFileRoute("/soft-freezer")({
+  head: () => ({
+    meta: [
+      { title: "Soft Freezer Order — Charlie's Gelato" },
+      {
+        name: "description",
+        content: "Top up the display cabinet freezers at Charlie's Gelato and log the trays out of stock.",
+      },
+      { property: "og:title", content: "Soft Freezer Order — Charlie's Gelato" },
+      {
+        property: "og:description",
+        content: "Top up the display cabinet freezers and log the trays out of stock.",
+      },
+    ],
+  }),
+  component: SoftFreezerOrder,
+});
+
+// Imported late to avoid circular type issues — TanStack needs this at module scope.
+import { createFileRoute } from "@tanstack/react-router";
+
+type GroupKey = "gelato" | "sorbetto" | "allergen";
+
+const GROUPS: { key: GroupKey; label: string }[] = [
+  { key: "gelato", label: "Gelato" },
+  { key: "sorbetto", label: "Sorbetto" },
+  { key: "allergen", label: "Contains nuts / gluten" },
+];
+
+function groupOf(f: Flavour): GroupKey {
+  if (f.category === "sorbetto") return "sorbetto";
+  if (f.contains_gluten || f.contains_nuts) return "allergen";
+  return "gelato";
+}
+
+function SoftFreezerOrder() {
+  const qc = useQueryClient();
+  const router = useRouter();
+  const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
+  const [q, setQ] = useState("");
+  const [counts, setCounts] = useState<Record<string, number>>({});
+
+  const grouped = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    const active = (flavours.data ?? [])
+      .filter((f) => f.active && f.name.toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const map: Record<GroupKey, Flavour[]> = { gelato: [], sorbetto: [], allergen: [] };
+    for (const f of active) map[groupOf(f)].push(f);
+    return map;
+  }, [flavours.data, q]);
+
+  const bump = (f: Flavour, delta: 1 | -1) =>
+    setCounts((prev) => {
+      const next = { ...prev };
+      const v = (next[f.id] ?? 0) + delta;
+      if (v <= 0) delete next[f.id];
+      else next[f.id] = v;
+      return next;
+    });
+
+  const lines = Object.entries(counts).map(([id, qty]) => ({ flavour_id: id, qty: -qty }));
+  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+
+  const submit = useMutation({
+    mutationFn: () => applyMovements(lines, "removal", "Soft freezer order"),
+    onSuccess: () => {
+      qc.invalidateQueries();
+      toast.success(`${total} tray${total === 1 ? "" : "s"} sent to the display freezer`);
+      setCounts({});
+      router.navigate({ to: "/" });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <AppShell title="Soft Freezer Order" subtitle="Top up the display freezers">
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search flavours…"
+            inputMode="search"
+            className="h-12 rounded-2xl pl-12 text-base"
+          />
+        </div>
+
+        {GROUPS.map(({ key, label }) => {
+          const list = grouped[key];
+          if (list.length === 0) return null;
+          return (
+            <section key={key} className="space-y-1.5">
+              <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {label}
+              </h2>
+              <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+                {list.map((f) => {
+                  const n = counts[f.id] ?? 0;
+                  return (
+                    <div key={f.id} className="flex items-center gap-2 px-3 py-1.5">
+                      <span className="min-w-0 flex-1 truncate font-display text-sm">{f.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {f.stock_qty} in stock
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Remove one ${f.name}`}
+                          disabled={n === 0}
+                          onClick={() => bump(f, -1)}
+                          className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90 disabled:opacity-30"
+                        >
+                          <Minus className="size-4" />
+                        </button>
+                        <span
+                          className={`w-7 text-center font-display text-base ${
+                            n > 0 ? "text-primary" : "text-muted-foreground"
+                          }`}
+                        >
+                          {n}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Add one ${f.name}`}
+                          onClick={() => bump(f, 1)}
+                          className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition active:scale-90"
+                        >
+                          <Plus className="size-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {total > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+          <div className="mx-auto max-w-4xl p-4">
+            <Button
+              className="h-16 w-full rounded-2xl text-lg"
+              disabled={submit.isPending}
+              onClick={() => submit.mutate()}
+            >
+              <Check className="mr-2 size-6" />
+              Confirm · {total} tray{total === 1 ? "" : "s"} to display freezer
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </AppShell>
+  );
+}
+
+// keep icon import referenced for tree-shaking clarity
+void IceCreamCone;
