@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   BATCH_SIZE,
+  categoryLabel,
   DEFAULT_DAY_CAPACITIES,
   db,
   fetchDayCapacities,
@@ -312,6 +313,7 @@ function DataPage() {
                       [
                         ["gelato", "Gelato"],
                         ["sorbetto", "Sorbetto"],
+                        ["special", "Specials / Seasonals"],
                       ] as const
                     ).map(([value, label]) => (
                       <Button
