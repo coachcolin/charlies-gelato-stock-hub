@@ -333,6 +333,9 @@ export function buildSuggestions(
         priority: f.priority,
         belowMin,
         score,
+        category: f.category,
+        contains_gluten: Boolean(f.contains_gluten),
+        contains_nuts: Boolean(f.contains_nuts),
       };
     })
     .filter((s) => s.qty > 0);
