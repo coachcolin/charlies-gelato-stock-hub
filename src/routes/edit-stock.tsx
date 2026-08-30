@@ -35,6 +35,7 @@ function EditStock() {
   const [q, setQ] = useState("");
   const [draft, setDraft] = useState<Record<string, number>>({});
   const [variances, setVariances] = useState<Variance[] | null>(null);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
 
