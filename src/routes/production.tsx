@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Plus, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -195,35 +195,21 @@ function ProductionPage() {
 
           ))}
 
-          <div className="surface flex items-center gap-2 p-3">
-            <Plus className="size-4 text-muted-foreground" />
-            <select
-              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-              value=""
-              onChange={(e) => {
-                const f = remaining.find((x) => x.id === e.target.value);
-                if (!f) return;
-                setDraft((prev) => [
-                  ...(prev ?? []),
-                  {
-                    flavour_id: f.id,
-                    flavour_name: f.name,
-                    qty: BATCH_SIZE,
-                    reason: "Added manually",
-                    note: "",
-                  },
-
-                ]);
-              }}
-            >
-              <option value="">Add a flavour…</option>
-              {remaining.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <AddFlavourSearch
+            remaining={remaining}
+            onAdd={(f) =>
+              setDraft((prev) => [
+                ...(prev ?? []),
+                {
+                  flavour_id: f.id,
+                  flavour_name: f.name,
+                  qty: BATCH_SIZE,
+                  reason: "Added manually",
+                  note: "",
+                },
+              ])
+            }
+          />
         </div>
 
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur">
@@ -319,6 +305,81 @@ function ProductionPage() {
         </section>
       ) : null}
     </AppShell>
+  );
+}
+
+function AddFlavourSearch({
+  remaining,
+  onAdd,
+}: {
+  remaining: { id: string; name: string; category?: string | null }[];
+  onAdd: (f: { id: string; name: string; category?: string | null }) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const normalized = query.trim().toLowerCase();
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+  const filtered = normalized
+    ? remaining
+        .filter((f) => f.name.toLowerCase().includes(normalized))
+        .slice(0, 8)
+    : remaining.slice(0, 8);
+
+  return (
+    <div ref={ref} className="surface relative p-3">
+      <div className="flex items-center gap-2">
+        <Plus className="size-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Type to find a flavour to add…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          className="h-11 rounded-xl border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+        />
+      </div>
+      {open && filtered.length > 0 ? (
+        <div className="absolute inset-x-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-2xl border border-border bg-card p-2 shadow-lg">
+          {filtered.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => {
+                onAdd(f);
+                setQuery("");
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-muted"
+            >
+              <span className="font-display text-base">{f.name}</span>
+              {f.category ? (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground">
+                  {f.category}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {open && normalized && filtered.length === 0 ? (
+        <div className="absolute inset-x-0 top-full z-30 mt-1 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-lg">
+          No flavours match “{query}”
+        </div>
+      ) : null}
+    </div>
   );
 }
 
