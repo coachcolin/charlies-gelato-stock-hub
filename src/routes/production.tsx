@@ -694,10 +694,12 @@ function ActiveReport({
                 />
               )}
             </div>
-
           );
-        })}
+              })}
+          </section>
+        ))}
       </div>
+
 
       <Button
         variant={outstanding.length === 0 ? "default" : "outline"}
