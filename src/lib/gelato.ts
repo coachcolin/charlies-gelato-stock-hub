@@ -291,11 +291,15 @@ export function buildSuggestions(
   }
 
   const committed = new Map<string, number>();
+  const committedBy = new Map<string, Map<string, number>>();
   for (const o of activeOrders) {
     if (o.status !== "active") continue;
     for (const i of o.items) {
       if (!i.flavour_id) continue;
       committed.set(i.flavour_id, (committed.get(i.flavour_id) ?? 0) + i.qty);
+      const perCustomer = committedBy.get(i.flavour_id) ?? new Map<string, number>();
+      perCustomer.set(o.wholesaler, (perCustomer.get(o.wholesaler) ?? 0) + i.qty);
+      committedBy.set(i.flavour_id, perCustomer);
     }
   }
 
@@ -317,7 +321,20 @@ export function buildSuggestions(
       const bits: string[] = [];
       if (hasSales && twoWeek > 0)
         bits.push(`selling ~${weeklyUsage.toFixed(1)} trays/week`);
-      if (owed > 0) bits.push(`${owed} committed to wholesale`);
+      if (owed > 0) {
+        const perCustomer = [...(committedBy.get(f.id)?.entries() ?? [])].sort(
+          (a, b) => b[1] - a[1],
+        );
+        if (perCustomer.length > 0) {
+          bits.push(
+            `${owed} committed to ${perCustomer
+              .map(([name, qty]) => (perCustomer.length === 1 ? name : `${name} (${qty})`))
+              .join(", ")}`,
+          );
+        } else {
+          bits.push(`${owed} committed to wholesale`);
+        }
+      }
       bits.push(`${f.stock_qty} in stock vs ${desired} minimum`);
       if (f.priority) bits.push("priority flavour");
 
