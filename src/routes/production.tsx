@@ -122,56 +122,74 @@ function ProductionPage() {
       <AppShell title="Review the plan" subtitle="Adjust quantities, remove or add flavours">
         <div className="space-y-2 pb-28">
           {draft.map((d) => (
-            <div key={d.flavour_id} className="surface flex items-start gap-3 p-4">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-display text-base">{d.flavour_name}</span>
-                <span className="text-xs text-muted-foreground">{d.reason}</span>
-              </span>
-              <Input
-                type="number"
-                inputMode="numeric"
-                step={BATCH_SIZE}
-                min={0}
-                value={d.qty}
+            <div key={d.flavour_id} className="surface space-y-3 p-4">
+              <div className="flex items-start gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-display text-base">{d.flavour_name}</span>
+                  <span className="text-xs text-muted-foreground">{d.reason}</span>
+                </span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  step={BATCH_SIZE}
+                  min={0}
+                  value={d.qty}
+                  onChange={(e) =>
+                    setDraft((prev) =>
+                      (prev ?? []).map((x) =>
+                        x.flavour_id === d.flavour_id
+                          ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
+                          : x,
+                      ),
+                    )
+                  }
+                  onBlur={(e) =>
+                    setDraft((prev) =>
+                      (prev ?? []).map((x) =>
+                        x.flavour_id === d.flavour_id
+                          ? {
+                              ...x,
+                              qty:
+                                Math.ceil(
+                                  (Math.max(0, Number(e.target.value) || 0)) / BATCH_SIZE,
+                                ) * BATCH_SIZE,
+                            }
+                          : x,
+                      ),
+                    )
+                  }
+                  className="h-12 w-20 shrink-0 text-center font-display text-lg"
+                  aria-label={`${d.flavour_name} trays`}
+                />
+
+                <button
+                  type="button"
+                  aria-label={`Remove ${d.flavour_name}`}
+                  onClick={() =>
+                    setDraft((prev) => (prev ?? []).filter((x) => x.flavour_id !== d.flavour_id))
+                  }
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <Textarea
+                value={d.note}
                 onChange={(e) =>
                   setDraft((prev) =>
                     (prev ?? []).map((x) =>
-                      x.flavour_id === d.flavour_id
-                        ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
-                        : x,
+                      x.flavour_id === d.flavour_id ? { ...x, note: e.target.value } : x,
                     ),
                   )
                 }
-                onBlur={(e) =>
-                  setDraft((prev) =>
-                    (prev ?? []).map((x) =>
-                      x.flavour_id === d.flavour_id
-                        ? {
-                            ...x,
-                            qty:
-                              Math.ceil(
-                                (Math.max(0, Number(e.target.value) || 0)) / BATCH_SIZE,
-                              ) * BATCH_SIZE,
-                          }
-                        : x,
-                    ),
-                  )
-                }
-                className="h-12 w-20 shrink-0 text-center font-display text-lg"
-                aria-label={`${d.flavour_name} trays`}
+                placeholder="Notes for the ice-cream makers…"
+                rows={2}
+                className="min-h-11 resize-y rounded-xl text-sm"
+                aria-label={`${d.flavour_name} production notes`}
               />
-
-              <button
-                type="button"
-                aria-label={`Remove ${d.flavour_name}`}
-                onClick={() =>
-                  setDraft((prev) => (prev ?? []).filter((x) => x.flavour_id !== d.flavour_id))
-                }
-                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent"
-              >
-                <X className="size-4" />
-              </button>
             </div>
+
           ))}
 
           <div className="surface flex items-center gap-2 p-3">
