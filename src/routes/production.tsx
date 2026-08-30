@@ -41,7 +41,13 @@ export const Route = createFileRoute("/production")({
   component: ProductionPage,
 });
 
-type Draft = { flavour_id: string; flavour_name: string; qty: number; reason: string };
+type Draft = {
+  flavour_id: string;
+  flavour_name: string;
+  qty: number;
+  reason: string;
+  note: string;
+};
 
 function ProductionPage() {
   const qc = useQueryClient();
