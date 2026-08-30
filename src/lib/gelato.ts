@@ -384,3 +384,114 @@ export function buildSuggestions(
 
   return kept;
 }
+
+/* ---------- weekly production planning ---------- */
+
+/** Peak season is planned as a single production day; low and mid run as a 2-4 day week. */
+export function isWeeklySeason(season: Season) {
+  return season !== "peak";
+}
+
+export const MIN_WEEK_DAYS = 2;
+export const MAX_WEEK_DAYS = 4;
+
+/** How many production days the week needs, based on how many trays are wanted. */
+export function recommendedDays(traysNeeded: number, dayCapacity: number, season: Season) {
+  if (!isWeeklySeason(season)) return 1;
+  if (!dayCapacity || dayCapacity <= 0) return MIN_WEEK_DAYS;
+  const raw = Math.ceil(traysNeeded / dayCapacity);
+  return Math.min(MAX_WEEK_DAYS, Math.max(MIN_WEEK_DAYS, raw));
+}
+
+export type AllergenGroup = "sorbetto" | "gluten" | "nuts" | "plain";
+
+export function allergenGroup(s: {
+  category: FlavourCategory;
+  contains_gluten: boolean;
+  contains_nuts: boolean;
+}): AllergenGroup {
+  if (s.category === "sorbetto") return "sorbetto";
+  if (s.contains_gluten) return "gluten";
+  if (s.contains_nuts) return "nuts";
+  return "plain";
+}
+
+export const GROUP_LABEL: Record<AllergenGroup, string> = {
+  sorbetto: "Sorbetti",
+  gluten: "Contains gluten",
+  nuts: "Contains nuts",
+  plain: "Gelato",
+};
+
+export type ScheduledSuggestion = Suggestion & { day: number; group: AllergenGroup };
+
+/**
+ * Spread suggestions across the week's production days:
+ * all sorbetti land on the chosen sorbetto day, gluten flavours run together,
+ * nut flavours run together, and both allergen blocks sit at the end of their day.
+ */
+export function scheduleWeek(
+  suggestions: Suggestion[],
+  days: number,
+  dayCapacity: number,
+  sorbettoDay: number,
+): ScheduledSuggestion[] {
+  const dayCount = Math.max(1, days);
+  const cap = dayCapacity > 0 ? dayCapacity : Infinity;
+  const buckets: { used: number; items: ScheduledSuggestion[] }[] = Array.from(
+    { length: dayCount },
+    () => ({ used: 0, items: [] }),
+  );
+
+  const tagged: ScheduledSuggestion[] = suggestions.map((s) => ({
+    ...s,
+    day: 1,
+    group: allergenGroup(s),
+  }));
+
+  const place = (item: ScheduledSuggestion, index: number) => {
+    const b = buckets[index];
+    item.day = index + 1;
+    b.items.push(item);
+    b.used += item.qty;
+  };
+
+  const roomiest = () =>
+    buckets.reduce((best, b, i) => (b.used < buckets[best].used ? i : best), 0);
+
+  const byGroup = (g: AllergenGroup) => tagged.filter((t) => t.group === g);
+
+  // 1. Sorbetti all on the nominated day.
+  const sorbDay = Math.min(dayCount, Math.max(1, sorbettoDay)) - 1;
+  for (const item of byGroup("sorbetto")) place(item, sorbDay);
+
+  // 2. Allergen blocks kept together, in the day with the most room.
+  for (const g of ["gluten", "nuts"] as const) {
+    const items = byGroup(g);
+    if (items.length === 0) continue;
+    const total = items.reduce((t, i) => t + i.qty, 0);
+    let target = buckets.findIndex((b) => b.used + total <= cap);
+    if (target < 0) target = roomiest();
+    for (const item of items) {
+      let idx = target;
+      if (buckets[idx].used + item.qty > cap) {
+        const alt = roomiest();
+        if (buckets[alt].used + item.qty <= cap) idx = alt;
+      }
+      place(item, idx);
+    }
+  }
+
+  // 3. Everything else fills the remaining room, keeping priority order.
+  for (const item of byGroup("plain")) {
+    let idx = buckets.findIndex((b) => b.used + item.qty <= cap);
+    if (idx < 0) idx = roomiest();
+    place(item, idx);
+  }
+
+  // Allergen batches run at the end of their day.
+  const rank: Record<AllergenGroup, number> = { plain: 0, sorbetto: 1, nuts: 2, gluten: 3 };
+  return buckets.flatMap((b) =>
+    [...b.items].sort((a, c) => rank[a.group] - rank[c.group]),
+  );
+}
