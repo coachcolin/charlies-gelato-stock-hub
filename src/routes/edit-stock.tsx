@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Loader2, Mic, Search, Square, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { applyMovements, fetchFlavours } from "@/lib/gelato";
+import { applyMovements, fetchFlavours, type Flavour } from "@/lib/gelato";
+import { transcribeStockTake } from "@/lib/voice.functions";
 
 export const Route = createFileRoute("/edit-stock")({
   head: () => ({
