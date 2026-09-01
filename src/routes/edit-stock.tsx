@@ -41,6 +41,10 @@ function EditStock() {
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
 
+  const voice = useVoiceStockTake(flavours.data ?? [], (counts) =>
+    setDraft((d) => ({ ...d, ...counts })),
+  );
+
   const list = useMemo(() => {
     const query = q.trim().toLowerCase();
     return (flavours.data ?? [])
