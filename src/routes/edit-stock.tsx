@@ -221,6 +221,14 @@ function matchFlavour(name: string, flavours: Flavour[]) {
   return null;
 }
 
+function formatElapsed(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const tenths = Math.floor((ms % 1000) / 100);
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${tenths}`;
+}
+
 function useVoiceStockTake(
   flavours: Flavour[],
   onApply: (counts: Record<string, number>) => void,
@@ -229,7 +237,16 @@ function useVoiceStockTake(
   const [recording, setRecording] = useState(false);
   const [rows, setRows] = useState<VoiceRow[] | null>(null);
   const [transcript, setTranscript] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const [audioData, setAudioData] = useState<number[] | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
   const transcribe = useServerFn(transcribeStockTake);
 
   const send = useMutation({
@@ -266,6 +283,25 @@ function useVoiceStockTake(
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const cleanupAudio = () => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    sourceRef.current?.disconnect();
+    sourceRef.current = null;
+    audioContextRef.current?.close().catch(() => {});
+    audioContextRef.current = null;
+    analyserRef.current = null;
+    dataArrayRef.current = null;
+    setAudioData(null);
+    setElapsed(0);
+  };
+
   async function start() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -277,11 +313,40 @@ function useVoiceStockTake(
       rec.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
+        cleanupAudio();
         send.mutate(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
       };
       recorderRef.current = rec;
       rec.start();
       setRecording(true);
+
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      await audioCtx.resume();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.75;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      audioContextRef.current = audioCtx;
+      analyserRef.current = analyser;
+      dataArrayRef.current = dataArray;
+      sourceRef.current = source;
+
+      const tick = () => {
+        if (!analyserRef.current || !dataArrayRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+        setAudioData(Array.from(dataArrayRef.current));
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+
+      startTimeRef.current = performance.now();
+      timerRef.current = window.setInterval(() => {
+        setElapsed(performance.now() - startTimeRef.current);
+      }, 80);
     } catch {
       toast.error("Microphone access was blocked");
     }
@@ -291,36 +356,75 @@ function useVoiceStockTake(
     recorderRef.current?.stop();
   }
 
+  const displayData = audioData ?? Array(16).fill(0);
+
   const panel = (
-    <section className="surface mb-4 p-4">
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          size="lg"
-          variant={recording ? "destructive" : "default"}
-          className="h-14 flex-1 rounded-2xl text-base"
-          disabled={send.isPending}
-          onClick={() => (recording ? stop() : start())}
-        >
-          {send.isPending ? (
-            <>
-              <Loader2 className="size-5 animate-spin" /> Working out what you said…
-            </>
-          ) : recording ? (
-            <>
-              <Square className="size-5" /> Stop &amp; read back
-            </>
-          ) : (
-            <>
-              <Mic className="size-5" /> Record stock take
-            </>
-          )}
-        </Button>
-      </div>
-      <p className="mt-2 px-1 text-xs text-muted-foreground">
-        Speak your counts, e.g. “one strawberry, one chocolate, three cookie dough”. You can check
-        and edit the list before it fills in the counts.
-      </p>
+    <section
+      className={`surface mb-4 p-4 transition-all ${
+        recording ? "bg-red-500/[0.04] ring-2 ring-red-500/50" : ""
+      }`}
+    >
+      <Button
+        type="button"
+        size="lg"
+        variant={recording ? "destructive" : "default"}
+        className="h-14 w-full rounded-2xl text-base"
+        disabled={send.isPending}
+        onClick={() => (recording ? stop() : start())}
+      >
+        {send.isPending ? (
+          <>
+            <Loader2 className="size-5 animate-spin" /> Working out what you said…
+          </>
+        ) : recording ? (
+          <>
+            <Square className="size-5" /> Stop recording
+          </>
+        ) : (
+          <>
+            <Mic className="size-5" /> Record stock take
+          </>
+        )}
+      </Button>
+
+      {recording ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+              </span>
+              <span className="font-display text-red-500">Recording…</span>
+            </div>
+            <span className="font-display text-2xl tabular-nums text-foreground">
+              {formatElapsed(elapsed)}
+            </span>
+          </div>
+
+          <div className="flex h-14 items-end justify-between gap-[3px] rounded-xl bg-muted/50 px-2 py-2">
+            {displayData.map((val, i) => {
+              const pct = typeof val === "number" ? val / 255 : 0;
+              return (
+                <div
+                  key={i}
+                  className="flex-1 rounded-t-sm bg-red-500 transition-[height] duration-75 ease-linear"
+                  style={{ height: `${Math.max(6, pct * 100)}%` }}
+                />
+              );
+            })}
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground">
+            Speak your counts clearly, e.g. “one strawberry, one chocolate, three cookie dough”
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 px-1 text-xs text-muted-foreground">
+          Speak your counts, e.g. “one strawberry, one chocolate, three cookie dough”. You can
+          check and edit the list before it fills in the counts.
+        </p>
+      )}
 
       {transcript && rows ? (
         <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
