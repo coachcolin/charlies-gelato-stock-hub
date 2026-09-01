@@ -327,7 +327,7 @@ function useVoiceStockTake(
       analyser.fftSize = 64;
       analyser.smoothingTimeConstant = 0.75;
       const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+      const dataArray = new Uint8Array(bufferLength) as Uint8Array<ArrayBuffer>;
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
       audioContextRef.current = audioCtx;
