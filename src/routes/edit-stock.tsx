@@ -194,3 +194,217 @@ function EditStock() {
     </AppShell>
   );
 }
+
+type VoiceRow = { id: string; name: string; qty: number; flavourId: string | null };
+
+function normalise(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/s$/, "");
+}
+
+function matchFlavour(name: string, flavours: Flavour[]) {
+  const n = normalise(name);
+  if (!n) return null;
+  const exact = flavours.find((f) => normalise(f.name) === n);
+  if (exact) return exact;
+  const partial = flavours.filter(
+    (f) => normalise(f.name).includes(n) || n.includes(normalise(f.name)),
+  );
+  if (partial.length === 1) return partial[0]!;
+  if (partial.length > 1) {
+    return [...partial].sort((a, b) => a.name.length - b.name.length)[0]!;
+  }
+  return null;
+}
+
+function useVoiceStockTake(
+  flavours: Flavour[],
+  onApply: (counts: Record<string, number>) => void,
+) {
+  const active = useMemo(() => flavours.filter((f) => f.active), [flavours]);
+  const [recording, setRecording] = useState(false);
+  const [rows, setRows] = useState<VoiceRow[] | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const transcribe = useServerFn(transcribeStockTake);
+
+  const send = useMutation({
+    mutationFn: async (blob: Blob) => {
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i += 1) bin += String.fromCharCode(buf[i]!);
+      return transcribe({
+        data: {
+          audio: btoa(bin),
+          mime: blob.type || "audio/webm",
+          flavours: active.map((f) => f.name),
+        },
+      });
+    },
+    onSuccess: (res) => {
+      setTranscript(res.text);
+      if (!res.items.length) {
+        toast.error(res.text ? "Couldn't pick out any flavours" : "Nothing was heard");
+        return;
+      }
+      setRows(
+        res.items.map((it, i) => {
+          const f = matchFlavour(it.name, active);
+          return {
+            id: `${i}-${it.name}`,
+            name: f?.name ?? it.name,
+            qty: Math.max(0, Math.round(it.qty || 0)),
+            flavourId: f?.id ?? null,
+          };
+        }),
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  async function start() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data);
+      };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        send.mutate(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+      };
+      recorderRef.current = rec;
+      rec.start();
+      setRecording(true);
+    } catch {
+      toast.error("Microphone access was blocked");
+    }
+  }
+
+  function stop() {
+    recorderRef.current?.stop();
+  }
+
+  const panel = (
+    <section className="surface mb-4 p-4">
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          size="lg"
+          variant={recording ? "destructive" : "default"}
+          className="h-14 flex-1 rounded-2xl text-base"
+          disabled={send.isPending}
+          onClick={() => (recording ? stop() : start())}
+        >
+          {send.isPending ? (
+            <>
+              <Loader2 className="size-5 animate-spin" /> Working out what you said…
+            </>
+          ) : recording ? (
+            <>
+              <Square className="size-5" /> Stop &amp; read back
+            </>
+          ) : (
+            <>
+              <Mic className="size-5" /> Record stock take
+            </>
+          )}
+        </Button>
+      </div>
+      <p className="mt-2 px-1 text-xs text-muted-foreground">
+        Speak your counts, e.g. “one strawberry, one chocolate, three cookie dough”. You can check
+        and edit the list before it fills in the counts.
+      </p>
+
+      {transcript && rows ? (
+        <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+          Heard: “{transcript}”
+        </p>
+      ) : null}
+
+      {rows ? (
+        <div className="mt-3 space-y-2">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-display text-base">{r.name}</span>
+                {!r.flavourId ? (
+                  <span className="text-xs text-primary">No matching flavour — will be skipped</span>
+                ) : null}
+              </span>
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={r.qty}
+                onChange={(e) =>
+                  setRows((rs) =>
+                    (rs ?? []).map((x) =>
+                      x.id === r.id
+                        ? { ...x, qty: Math.max(0, Math.round(Number(e.target.value) || 0)) }
+                        : x,
+                    ),
+                  )
+                }
+                onFocus={(e) => e.target.select()}
+                className="h-11 w-20 text-center font-display text-lg"
+                aria-label={`${r.name} count`}
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-10 shrink-0"
+                aria-label={`Remove ${r.name}`}
+                onClick={() => setRows((rs) => (rs ?? []).filter((x) => x.id !== r.id))}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              className="h-12 flex-1 rounded-2xl"
+              onClick={() => {
+                const counts: Record<string, number> = {};
+                rows.forEach((r) => {
+                  if (r.flavourId) counts[r.flavourId] = r.qty;
+                });
+                const n = Object.keys(counts).length;
+                if (!n) {
+                  toast.error("Nothing to apply");
+                  return;
+                }
+                onApply(counts);
+                setRows(null);
+                setTranscript("");
+                toast.success(`Filled in ${n} flavour${n === 1 ? "" : "s"}`);
+              }}
+            >
+              Fill in counts
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 rounded-2xl"
+              onClick={() => {
+                setRows(null);
+                setTranscript("");
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+
+  return { panel };
+}
