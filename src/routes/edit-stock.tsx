@@ -338,7 +338,7 @@ function useVoiceStockTake(
       const tick = () => {
         if (!analyserRef.current || !dataArrayRef.current) return;
         analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-        setAudioData(Array.from(dataArrayRef.current as Uint8Array));
+        setAudioData(Array.from(dataArrayRef.current));
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
