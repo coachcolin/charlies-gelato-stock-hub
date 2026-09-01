@@ -239,6 +239,8 @@ function useVoiceStockTake(
   const [transcript, setTranscript] = useState("");
   const [elapsed, setElapsed] = useState(0);
   const [audioData, setAudioData] = useState<number[] | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
