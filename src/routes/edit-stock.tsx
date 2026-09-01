@@ -434,6 +434,14 @@ function useVoiceStockTake(
         </p>
       )}
 
+      {playbackUrl && !recording ? (
+        <div className="mt-3 rounded-2xl bg-muted/60 p-3">
+          <p className="mb-2 font-display text-sm">Your recording</p>
+          <audio src={playbackUrl} controls className="w-full" preload="metadata" />
+        </div>
+      ) : null}
+
+
       {transcript && rows ? (
         <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
           Heard: “{transcript}”
