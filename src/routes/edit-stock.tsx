@@ -316,8 +316,14 @@ function useVoiceStockTake(
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
         cleanupAudio();
-        send.mutate(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        setPlaybackUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
+        send.mutate(blob);
       };
+
       recorderRef.current = rec;
       rec.start();
       setRecording(true);
