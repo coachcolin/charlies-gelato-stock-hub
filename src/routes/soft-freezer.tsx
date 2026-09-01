@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { Check, Minus, Plus, Search } from "lucide-react";
+import { ArrowLeft, Check, Minus, Plus, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,6 +48,7 @@ function SoftFreezerOrder() {
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const [q, setQ] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [reviewing, setReviewing] = useState(false);
 
   const grouped = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -71,16 +72,115 @@ function SoftFreezerOrder() {
   const lines = Object.entries(counts).map(([id, qty]) => ({ flavour_id: id, qty: -qty }));
   const total = Object.values(counts).reduce((s, n) => s + n, 0);
 
+  const selected = useMemo(() => {
+    const byId = new Map((flavours.data ?? []).map((f) => [f.id, f]));
+    return Object.entries(counts)
+      .map(([id, qty]) => ({ flavour: byId.get(id), qty }))
+      .filter((x): x is { flavour: Flavour; qty: number } => Boolean(x.flavour))
+      .sort((a, b) => a.flavour.name.localeCompare(b.flavour.name));
+  }, [counts, flavours.data]);
+
+  const removeLine = (id: string) =>
+    setCounts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
   const submit = useMutation({
     mutationFn: () => applyMovements(lines, "removal", "Soft freezer order"),
     onSuccess: () => {
       qc.invalidateQueries();
       toast.success(`${total} tray${total === 1 ? "" : "s"} sent to the display freezer`);
       setCounts({});
+      setReviewing(false);
       router.navigate({ to: "/" });
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  if (reviewing) {
+    return (
+      <AppShell title="Review Soft Freezer Order" subtitle="Check before confirming">
+        <div className="space-y-4 pb-28">
+          <p className="px-1 text-sm text-muted-foreground">
+            These trays will be removed from stock and counted as gone to the display freezer.
+          </p>
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {selected.map(({ flavour, qty }) => (
+              <div key={flavour.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="min-w-0 flex-1 truncate font-display text-base">
+                  {flavour.name}
+                </span>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Remove one ${flavour.name}`}
+                    onClick={() => bump(flavour, -1)}
+                    className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90"
+                  >
+                    <Minus className="size-4" />
+                  </button>
+                  <span className="w-7 text-center font-display text-base text-primary">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Add one ${flavour.name}`}
+                    onClick={() => bump(flavour, 1)}
+                    className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition active:scale-90"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Remove ${flavour.name} from order`}
+                  onClick={() => removeLine(flavour.id)}
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted active:scale-90"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+            {selected.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                Nothing selected — go back to add flavours.
+              </p>
+            ) : null}
+          </div>
+          <div className="flex items-center justify-between px-1 font-display">
+            <span className="text-muted-foreground">Total</span>
+            <span className="text-lg">
+              {total} tray{total === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+          <div className="mx-auto flex max-w-4xl gap-3 p-4">
+            <Button
+              variant="outline"
+              className="h-16 rounded-2xl px-6 text-lg"
+              disabled={submit.isPending}
+              onClick={() => setReviewing(false)}
+            >
+              <ArrowLeft className="mr-2 size-5" />
+              Back
+            </Button>
+            <Button
+              className="h-16 flex-1 rounded-2xl text-lg"
+              disabled={submit.isPending || total === 0}
+              onClick={() => submit.mutate()}
+            >
+              <Check className="mr-2 size-6" />
+              Confirm · {total} tray{total === 1 ? "" : "s"} to display freezer
+            </Button>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Soft Freezer Order" subtitle="Top up the display freezers">
@@ -153,11 +253,10 @@ function SoftFreezerOrder() {
           <div className="mx-auto max-w-4xl p-4">
             <Button
               className="h-16 w-full rounded-2xl text-lg"
-              disabled={submit.isPending}
-              onClick={() => submit.mutate()}
+              onClick={() => setReviewing(true)}
             >
               <Check className="mr-2 size-6" />
-              Confirm · {total} tray{total === 1 ? "" : "s"} to display freezer
+              Review changes · {total} tray{total === 1 ? "" : "s"}
             </Button>
           </div>
         </div>
