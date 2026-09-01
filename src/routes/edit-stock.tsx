@@ -120,6 +120,8 @@ function EditStock() {
 
   return (
     <AppShell title="Edit Stock Levels" subtitle="Enter the counts from your stock take">
+      {voice.panel}
+
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
         <Input
