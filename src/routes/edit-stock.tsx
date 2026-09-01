@@ -239,6 +239,8 @@ function useVoiceStockTake(
   const [transcript, setTranscript] = useState("");
   const [elapsed, setElapsed] = useState(0);
   const [audioData, setAudioData] = useState<number[] | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -314,8 +316,14 @@ function useVoiceStockTake(
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
         cleanupAudio();
-        send.mutate(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        setPlaybackUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
+        send.mutate(blob);
       };
+
       recorderRef.current = rec;
       rec.start();
       setRecording(true);
@@ -425,6 +433,14 @@ function useVoiceStockTake(
           check and edit the list before it fills in the counts.
         </p>
       )}
+
+      {playbackUrl && !recording ? (
+        <div className="mt-3 rounded-2xl bg-muted/60 p-3">
+          <p className="mb-2 font-display text-sm">Your recording</p>
+          <audio src={playbackUrl} controls className="w-full" preload="metadata" />
+        </div>
+      ) : null}
+
 
       {transcript && rows ? (
         <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
