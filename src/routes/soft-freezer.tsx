@@ -51,6 +51,25 @@ function SoftFreezerOrder() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [reviewing, setReviewing] = useState(false);
 
+  const voice = useVoiceStockTake(
+    flavours.data ?? [],
+    (heard) =>
+      setCounts((prev) => {
+        const next = { ...prev };
+        for (const [id, qty] of Object.entries(heard)) {
+          if (qty > 0) next[id] = qty;
+          else delete next[id];
+        }
+        return next;
+      }),
+    {
+      recordLabel: "Record soft freezer order",
+      hint: "Speak the trays you're taking, e.g. “one strawberry, two chocolate, three cookie dough”. You can check and edit the list before it fills in the order.",
+      applyLabel: "Add to order",
+      appliedMessage: (n) => `Added ${n} flavour${n === 1 ? "" : "s"} to the order`,
+    },
+  );
+
   const grouped = useMemo(() => {
     const query = q.trim().toLowerCase();
     const active = (flavours.data ?? [])
