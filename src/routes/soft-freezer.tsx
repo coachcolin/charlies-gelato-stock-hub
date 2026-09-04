@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useVoiceStockTake } from "@/components/VoiceStockTake";
 import { applyMovements, fetchFlavours, type Flavour } from "@/lib/gelato";
 
 export const Route = createFileRoute("/soft-freezer")({
