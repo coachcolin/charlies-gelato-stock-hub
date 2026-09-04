@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useVoiceStockTake } from "@/components/VoiceStockTake";
 import { applyMovements, fetchFlavours, type Flavour } from "@/lib/gelato";
 
 export const Route = createFileRoute("/soft-freezer")({
@@ -49,6 +50,25 @@ function SoftFreezerOrder() {
   const [q, setQ] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [reviewing, setReviewing] = useState(false);
+
+  const voice = useVoiceStockTake(
+    flavours.data ?? [],
+    (heard) =>
+      setCounts((prev) => {
+        const next = { ...prev };
+        for (const [id, qty] of Object.entries(heard)) {
+          if (qty > 0) next[id] = qty;
+          else delete next[id];
+        }
+        return next;
+      }),
+    {
+      recordLabel: "Record soft freezer order",
+      hint: "Speak the trays you're taking, e.g. “one strawberry, two chocolate, three cookie dough”. You can check and edit the list before it fills in the order.",
+      applyLabel: "Add to order",
+      appliedMessage: (n) => `Added ${n} flavour${n === 1 ? "" : "s"} to the order`,
+    },
+  );
 
   const grouped = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -184,6 +204,8 @@ function SoftFreezerOrder() {
 
   return (
     <AppShell title="Soft Freezer Order" subtitle="Top up the display freezers">
+      {voice.panel}
+
       <div className="space-y-4">
         <div className="relative">
           <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
