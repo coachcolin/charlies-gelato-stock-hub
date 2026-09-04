@@ -204,6 +204,8 @@ function SoftFreezerOrder() {
 
   return (
     <AppShell title="Soft Freezer Order" subtitle="Top up the display freezers">
+      {voice.panel}
+
       <div className="space-y-4">
         <div className="relative">
           <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
