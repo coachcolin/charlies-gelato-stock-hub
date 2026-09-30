@@ -6,10 +6,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Flavour } from "@/lib/gelato";
+import type { Flavour, Unit } from "@/lib/gelato";
 import { transcribeStockTake } from "@/lib/voice.functions";
 
-type VoiceRow = { id: string; name: string; qty: number; flavourId: string | null };
+type VoiceRow = { id: string; name: string; qty: number; flavourId: string | null; unit: Unit };
+
+export type VoiceCounts = { tray: Record<string, number>; tub: Record<string, number> };
 
 function normalise(s: string) {
   return s
@@ -45,7 +47,7 @@ function formatElapsed(ms: number) {
 
 export function useVoiceStockTake(
   flavours: Flavour[],
-  onApply: (counts: Record<string, number>) => void,
+  onApply: (counts: VoiceCounts) => void,
   options?: {
     recordLabel?: string;
     hint?: string;
@@ -106,6 +108,7 @@ export function useVoiceStockTake(
             name: f?.name ?? it.name,
             qty: Math.max(0, Math.round(it.qty || 0)),
             flavourId: f?.id ?? null,
+            unit: it.unit === "tub" ? "tub" : "tray",
           };
         }),
       );
@@ -252,7 +255,7 @@ export function useVoiceStockTake(
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Speak your counts clearly, e.g. “one strawberry, one chocolate, three cookie dough”
+            Speak your counts clearly, e.g. “one strawberry, one chocolate, three cookie dough tubs”
           </p>
         </div>
       ) : (
@@ -282,6 +285,22 @@ export function useVoiceStockTake(
                   <span className="text-xs text-primary">No matching flavour — will be skipped</span>
                 ) : null}
               </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setRows((rs) =>
+                    (rs ?? []).map((x) =>
+                      x.id === r.id ? { ...x, unit: x.unit === "tub" ? "tray" : "tub" } : x,
+                    ),
+                  )
+                }
+                className={`h-11 shrink-0 rounded-xl px-3 font-display text-sm ${
+                  r.unit === "tub" ? "bg-sky text-sky-foreground" : "bg-cream text-cream-foreground"
+                }`}
+                aria-label={`Switch ${r.name} between trays and tubs`}
+              >
+                {r.unit === "tub" ? "Tubs" : "Trays"}
+              </button>
               <Input
                 type="number"
                 inputMode="numeric"
@@ -316,11 +335,11 @@ export function useVoiceStockTake(
               type="button"
               className="h-12 flex-1 rounded-2xl"
               onClick={() => {
-                const counts: Record<string, number> = {};
+                const counts: VoiceCounts = { tray: {}, tub: {} };
                 rows.forEach((r) => {
-                  if (r.flavourId) counts[r.flavourId] = r.qty;
+                  if (r.flavourId) counts[r.unit][r.flavourId] = r.qty;
                 });
-                const n = Object.keys(counts).length;
+                const n = Object.keys(counts.tray).length + Object.keys(counts.tub).length;
                 if (!n) {
                   toast.error("Nothing to apply");
                   return;

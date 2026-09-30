@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-export type VoiceCount = { name: string; qty: number; matched: boolean };
+export type VoiceCount = { name: string; qty: number; matched: boolean; unit?: "tray" | "tub" };
 
 function base64ToBytes(b64: string) {
   const bin = atob(b64);
@@ -51,7 +51,7 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You convert a spoken gelato stock take into structured counts. Match each spoken flavour to the closest name in the provided flavour list (allow plurals, mishearings and partial names). If nothing matches well, return the spoken words as the name and matched=false. Quantities are tray counts; words like 'one', 'a', 'couple' mean 1, 2. Never invent flavours that were not spoken.",
+              "You convert a spoken gelato stock take into structured counts. Match each spoken flavour to the closest name in the provided flavour list (allow plurals, mishearings and partial names). If nothing matches well, return the spoken words as the name and matched=false. Stock comes as trays (large) or tubs (small). Set unit='tub' only when the speaker says tub/tubs for that item; otherwise unit='tray'. If the same flavour is spoken as both trays and tubs, return two separate items. Words like 'one', 'a', 'couple' mean 1, 2. Never invent flavours that were not spoken.",
           },
           {
             role: "user",
@@ -75,8 +75,9 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
                         name: { type: "string" },
                         qty: { type: "number" },
                         matched: { type: "boolean" },
+                        unit: { type: "string", enum: ["tray", "tub"] },
                       },
-                      required: ["name", "qty", "matched"],
+                      required: ["name", "qty", "matched", "unit"],
                       additionalProperties: false,
                     },
                   },
