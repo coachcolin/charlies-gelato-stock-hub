@@ -19,7 +19,15 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
 
-import { applyMovements, db, fetchFlavours, fetchOrders, type Flavour } from "@/lib/gelato";
+import {
+  applyMovements,
+  db,
+  fetchFlavours,
+  fetchOrders,
+  formatTraysTubs,
+  type Flavour,
+  type Unit,
+} from "@/lib/gelato";
 
 export const Route = createFileRoute("/wholesale")({
   head: () => ({
@@ -548,7 +556,7 @@ function ManualOrderDialog({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const totalTrays = picked.reduce((s, p) => s + p.qty, 0);
+  const totalLabel = itemsTotal(picked);
   const canSave = customer.trim().length > 0 && picked.length > 0 && picked.every((p) => p.qty > 0);
 
   return (
@@ -688,7 +696,7 @@ function ManualOrderDialog({
           >
             {save.isPending
               ? "Saving…"
-              : `Save order${picked.length ? ` · ${totalTrays} trays` : ""}`}
+              : `Save order${picked.length ? ` · ${totalLabel}` : ""}`}
           </Button>
         </div>
       </DialogContent>
