@@ -221,7 +221,7 @@ function DataPage() {
               </span>
               <span className="text-xs text-muted-foreground">
                 {categoryLabel(f.category)} · min{" "}
-                {f.desired_peak}/{f.desired_mid}/{f.desired_low} · {f.stock_qty} in stock
+                {f.desired_peak}/{f.desired_mid}/{f.desired_low} trays · {f.stock_qty} trays, {f.tub_qty ?? 0} tubs in stock
               </span>
             </span>
             {!f.active ? (

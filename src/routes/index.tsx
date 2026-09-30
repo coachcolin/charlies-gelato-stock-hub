@@ -101,7 +101,8 @@ function Home() {
   const totalTrays = (flavours.data ?? []).reduce((s, f) => s + f.stock_qty, 0);
   const capacity = (freezers.data ?? []).reduce((s, f) => s + f.capacity_trays, 0);
   const activeOrders = (orders.data ?? []).filter((o) => o.status === "active").length;
-  const fullness = capacity > 0 ? Math.round((totalTrays / capacity) * 100) : 0;
+  const used = (flavours.data ?? []).reduce((s, f) => s + f.stock_qty + (f.tub_qty ?? 0) / 5, 0);
+  const fullness = capacity > 0 ? Math.round((used / capacity) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background pb-12">
