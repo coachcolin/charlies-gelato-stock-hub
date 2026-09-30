@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import type { Unit } from "@/lib/gelato";
 
 export function QtyDialog({
   open,
@@ -19,19 +20,25 @@ export function QtyDialog({
   confirmLabel = "Add",
   onConfirm,
   onOpenChange,
+  showUnit = false,
 }: {
   open: boolean;
   title: string;
   description?: string | undefined;
   initial?: number;
   confirmLabel?: string;
-  onConfirm: (qty: number) => void;
+  onConfirm: (qty: number, unit: Unit) => void;
+  showUnit?: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [qty, setQty] = useState(initial);
+  const [unit, setUnit] = useState<Unit>("tray");
 
   useEffect(() => {
-    if (open) setQty(initial);
+    if (open) {
+      setQty(initial);
+      setUnit("tray");
+    }
   }, [open, initial]);
 
   return (
@@ -43,6 +50,23 @@ export function QtyDialog({
             <p className="text-sm text-muted-foreground">{description}</p>
           ) : null}
         </DialogHeader>
+
+        {showUnit ? (
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1">
+            {(["tray", "tub"] as const).map((u) => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => setUnit(u)}
+                className={`h-11 rounded-xl font-display text-base transition ${
+                  unit === u ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground"
+                }`}
+              >
+                {u === "tray" ? "Trays" : "Tubs"}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flex items-center justify-center gap-4 py-2">
           <Button
@@ -92,7 +116,7 @@ export function QtyDialog({
           <Button
             type="button"
             className="h-14 w-full rounded-2xl text-base"
-            onClick={() => onConfirm(qty)}
+            onClick={() => onConfirm(qty, unit)}
           >
             {confirmLabel}
           </Button>
