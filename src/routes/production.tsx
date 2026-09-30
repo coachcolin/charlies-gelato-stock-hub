@@ -14,6 +14,7 @@ import {
   DEFAULT_DAY_CAPACITIES,
   GROUP_LABEL,
   applyMovements,
+  formatTraysTubs,
   buildSuggestions,
   fetchDayCapacities,
   db,
@@ -52,6 +53,7 @@ type Draft = {
   flavour_id: string;
   flavour_name: string;
   qty: number;
+  tubs: number;
   reason: string;
   note: string;
   day: number;
@@ -161,6 +163,7 @@ function ProductionPage() {
           flavour_id: i.flavour_id,
           flavour_name: i.flavour_name,
           suggested_qty: i.qty,
+          suggested_tubs: i.tubs,
           reason: i.reason,
           note: i.note.trim() || null,
           day_index: i.day,
@@ -281,6 +284,28 @@ function ProductionPage() {
                         className="h-12 w-20 shrink-0 text-center font-display text-lg"
                         aria-label={`${d.flavour_name} trays`}
                       />
+                      <span className="sr-only">trays</span>
+
+                      <label className="flex shrink-0 flex-col items-center">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={d.tubs}
+                          onChange={(e) =>
+                            setDraft((prev) =>
+                              (prev ?? []).map((x) =>
+                                x.flavour_id === d.flavour_id
+                                  ? { ...x, tubs: Math.max(0, Number(e.target.value) || 0) }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className="h-12 w-16 text-center font-display text-lg"
+                          aria-label={`${d.flavour_name} tubs`}
+                        />
+                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">tubs</span>
+                      </label>
 
                       <button
                         type="button"
@@ -351,6 +376,7 @@ function ProductionPage() {
                   flavour_id: f.id,
                   flavour_name: f.name,
                   qty: BATCH_SIZE,
+                  tubs: 0,
                   reason: "Added manually",
                   note: "",
                   day:
@@ -494,6 +520,7 @@ function ProductionPage() {
               flavour_id: s.flavour_id,
               flavour_name: s.flavour_name,
               qty: s.qty,
+              tubs: s.tubsNeeded,
               reason: s.reason,
               note: "",
               day: s.day,
@@ -628,6 +655,7 @@ function ActiveReport({
 }) {
   const qc = useQueryClient();
   const [qtys, setQtys] = useState<Record<string, number>>({});
+  const [tubQtys, setTubQtys] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
@@ -650,18 +678,27 @@ function ActiveReport({
       flavourId,
       name,
       qty,
+      tubs,
     }: {
       itemId: string;
       flavourId: string | null;
       name: string;
       qty: number;
+      tubs: number;
     }) => {
       if (flavourId) {
-        await applyMovements([{ flavour_id: flavourId, qty }], "production", `Made ${name}`);
+        await applyMovements(
+          [
+            { flavour_id: flavourId, qty, unit: "tray" },
+            { flavour_id: flavourId, qty: tubs, unit: "tub" },
+          ],
+          "production",
+          `Made ${name}`,
+        );
       }
       const res = await db
         .from("production_report_items")
-        .update({ done: true, produced_qty: qty })
+        .update({ done: true, produced_qty: qty, produced_tubs: tubs })
         .eq("id", itemId);
       if (res.error) throw new Error(res.error.message);
     },
@@ -722,6 +759,7 @@ function ActiveReport({
             .filter((i) => (multiDay ? (i.day_index ?? 1) === activeDay : true))
             .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
+          const tubValue = tubQtys[i.id] ?? i.produced_tubs ?? i.suggested_tubs ?? 0;
           return (
             <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
 
@@ -729,7 +767,9 @@ function ActiveReport({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-base">{i.flavour_name}</span>
                   <span className="text-xs text-muted-foreground">
-                    {i.done ? `Made ${i.produced_qty} trays` : `Suggested ${i.suggested_qty} trays`}
+                    {i.done
+                      ? `Made ${formatTraysTubs(i.produced_qty ?? 0, i.produced_tubs ?? 0)}`
+                      : `Suggested ${formatTraysTubs(i.suggested_qty, i.suggested_tubs ?? 0)}`}
                   </span>
                 </span>
                 {!i.done ? (
@@ -747,6 +787,20 @@ function ActiveReport({
                       className="h-12 w-20 text-center font-display text-lg"
                       aria-label={`${i.flavour_name} trays made`}
                     />
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={tubValue}
+                      onChange={(e) =>
+                        setTubQtys((q) => ({
+                          ...q,
+                          [i.id]: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="h-12 w-16 text-center font-display text-lg"
+                      aria-label={`${i.flavour_name} tubs made`}
+                      placeholder="tubs"
+                    />
                     <Button
                       size="icon"
                       className="size-12 shrink-0 rounded-full"
@@ -757,6 +811,7 @@ function ActiveReport({
                           flavourId: i.flavour_id,
                           name: i.flavour_name,
                           qty: value,
+                          tubs: tubValue,
                         })
                       }
                     >
