@@ -159,15 +159,15 @@ function StockPage() {
           const below = min > 0 && f.stock_qty < min;
           const watch = min > 0 && !below && f.stock_qty <= min + 2;
           return (
-            <div key={f.id} className="surface flex min-h-16 items-center gap-3 px-4 py-3">
+            <div key={f.id} className="surface flex min-h-16 min-w-0 items-center gap-2 px-3 py-3">
               {f.image_url ? (
                 <img
                   src={f.image_url}
                   alt=""
-                  className="size-11 shrink-0 rounded-full object-cover"
+                  className="hidden size-11 shrink-0 rounded-full object-cover sm:block"
                 />
               ) : (
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-cream font-display text-base text-cream-foreground">
+                <span className="hidden size-11 shrink-0 items-center justify-center rounded-full bg-cream sm:flex font-display text-base text-cream-foreground">
                   {f.name.slice(0, 2)}
                 </span>
               )}
@@ -184,14 +184,14 @@ function StockPage() {
                 </span>
               </span>
               <span className="flex shrink-0 flex-col items-center">
-                <span className="rounded-full bg-sky/30 px-3 py-1.5 font-display text-lg text-foreground">
+                <span className="rounded-full bg-sky/30 px-2.5 py-1 font-display text-base text-foreground">
                   {f.tub_qty ?? 0}
                 </span>
                 <span className="text-[10px] font-semibold uppercase text-muted-foreground">tubs</span>
               </span>
               <span className="flex shrink-0 flex-col items-center">
               <span
-                className={`rounded-full px-3 py-1.5 font-display text-lg ${
+                className={`rounded-full px-2.5 py-1 font-display text-base ${
                   below
                     ? "bg-primary text-primary-foreground"
                     : watch
