@@ -256,29 +256,28 @@ function SoftFreezerOrder() {
           if (list.length === 0) return null;
           return (
             <section key={key} className="space-y-1.5">
-              <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {label}
-              </h2>
+              <div className="flex items-end px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <h2 className="flex-1 -ml-2">{label}</h2>
+                <span className="w-[76px] text-center">Trays</span>
+                <span className="ml-2 w-[76px] text-center">Tubs</span>
+              </div>
               <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
                 {list.map((f) => {
                   const counter = (unit: Unit) => {
                     const n = counts[k(f.id, unit)] ?? 0;
                     return (
                       <div className="flex shrink-0 items-center gap-0.5">
-                        <span className="w-7 text-right text-[10px] font-semibold uppercase text-muted-foreground">
-                          {unit === "tub" ? "Tub" : "Tray"}
-                        </span>
                         <button
                           type="button"
                           aria-label={`Remove one ${f.name} ${unit}`}
                           disabled={n === 0}
                           onClick={() => bump(f, -1, unit)}
-                          className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90 disabled:opacity-30"
+                          className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90 disabled:opacity-30"
                         >
                           <Minus className="size-4" />
                         </button>
                         <span
-                          className={`w-6 text-center font-display text-base ${
+                          className={`w-5 text-center font-display text-sm ${
                             n > 0 ? "text-primary" : "text-muted-foreground"
                           }`}
                         >
@@ -288,7 +287,7 @@ function SoftFreezerOrder() {
                           type="button"
                           aria-label={`Add one ${f.name} ${unit}`}
                           onClick={() => bump(f, 1, unit)}
-                          className={`flex size-8 items-center justify-center rounded-full transition active:scale-90 ${
+                          className={`flex size-7 items-center justify-center rounded-full transition active:scale-90 ${
                             unit === "tub" ? "bg-sky text-sky-foreground" : "bg-primary text-primary-foreground"
                           }`}
                         >
@@ -298,10 +297,10 @@ function SoftFreezerOrder() {
                     );
                   };
                   return (
-                    <div key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5">
-                      <span className="min-w-0 flex-1 truncate font-display text-sm">
-                        {f.name}
-                        <span className="ml-2 font-sans text-xs text-muted-foreground">
+                    <div key={f.id} className="flex items-center gap-2 px-3 py-1.5">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-display text-sm">{f.name}</span>
+                        <span className="block text-[11px] leading-tight text-muted-foreground">
                           {f.stock_qty} trays · {f.tub_qty ?? 0} tubs
                         </span>
                       </span>
