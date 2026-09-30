@@ -66,6 +66,9 @@ export function MovementScreen({
       applyMovements(
         lines.map((l) => ({ flavour_id: l.id, qty: sign * l.qty, unit: l.unit })),
         kind,
+        undefined,
+        undefined,
+        kind === "removal" && resolvedAccount ? resolvedAccount : undefined,
       ),
     onSuccess: () => {
       qc.invalidateQueries();
