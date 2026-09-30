@@ -138,9 +138,40 @@ export function MovementScreen({
                 </button>
               ))}
             </div>
+            {kind === "removal" ? (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Where is this stock going?
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["Charlie's Shop", ...wholesalers, "__other__"].map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => setAccount(w)}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+                        account === w
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-foreground"
+                      }`}
+                    >
+                      {w === "__other__" ? "Someone else…" : w}
+                    </button>
+                  ))}
+                </div>
+                {account === "__other__" ? (
+                  <input
+                    value={otherAccount}
+                    onChange={(e) => setOtherAccount(e.target.value)}
+                    placeholder="Who is it for? e.g. Café Milano"
+                    className="h-12 w-full rounded-xl border border-border bg-background px-4 text-sm"
+                  />
+                ) : null}
+              </div>
+            ) : null}
             <Button
               className="h-16 w-full rounded-2xl text-lg"
-              disabled={submit.isPending}
+              disabled={submit.isPending || (kind === "removal" && !resolvedAccount)}
               onClick={() => submit.mutate()}
             >
               <Check className="mr-2 size-6" />
