@@ -355,15 +355,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      apply_stock_movements: {
-        Args: {
-          _kind: string
-          _movements: Json
-          _note?: string
-          _order_id?: string
-        }
-        Returns: string
-      }
+      apply_stock_movements:
+        | {
+            Args: {
+              _kind: string
+              _movements: Json
+              _note?: string
+              _order_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              _account?: string
+              _kind: string
+              _movements: Json
+              _note: string
+              _order_id: string
+            }
+            Returns: string
+          }
     }
     Enums: {
       [_ in never]: never
