@@ -8,7 +8,19 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVoiceStockTake } from "@/components/VoiceStockTake";
-import { applyMovements, fetchFlavours, type Flavour } from "@/lib/gelato";
+import {
+  applyMovements,
+  fetchFlavours,
+  formatTraysTubs,
+  type Flavour,
+  type Unit,
+} from "@/lib/gelato";
+
+const k = (id: string, unit: Unit) => `${id}|${unit}`;
+const parseKey = (key: string) => {
+  const [id, unit] = key.split("|");
+  return { id: id as string, unit: (unit === "tub" ? "tub" : "tray") as Unit };
+};
 
 export const Route = createFileRoute("/soft-freezer")({
   head: () => ({
@@ -56,9 +68,11 @@ function SoftFreezerOrder() {
     (heard) =>
       setCounts((prev) => {
         const next = { ...prev };
-        for (const [id, qty] of Object.entries(heard)) {
-          if (qty > 0) next[id] = qty;
-          else delete next[id];
+        for (const unit of ["tray", "tub"] as const) {
+          for (const [id, qty] of Object.entries(heard[unit])) {
+            if (qty > 0) next[k(id, unit)] = qty;
+            else delete next[k(id, unit)];
+          }
         }
         return next;
       }),
@@ -80,30 +94,44 @@ function SoftFreezerOrder() {
     return map;
   }, [flavours.data, q]);
 
-  const bump = (f: Flavour, delta: 1 | -1) =>
+  const bump = (f: Flavour, delta: 1 | -1, unit: Unit = "tray") =>
     setCounts((prev) => {
       const next = { ...prev };
-      const v = (next[f.id] ?? 0) + delta;
-      if (v <= 0) delete next[f.id];
-      else next[f.id] = v;
+      const key = k(f.id, unit);
+      const v = (next[key] ?? 0) + delta;
+      if (v <= 0) delete next[key];
+      else next[key] = v;
       return next;
     });
 
-  const lines = Object.entries(counts).map(([id, qty]) => ({ flavour_id: id, qty: -qty }));
-  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+  const lines = Object.entries(counts).map(([key, qty]) => {
+    const { id, unit } = parseKey(key);
+    return { flavour_id: id, qty: -qty, unit };
+  });
+  let trays = 0;
+  let tubs = 0;
+  for (const [key, n] of Object.entries(counts)) {
+    if (parseKey(key).unit === "tub") tubs += n;
+    else trays += n;
+  }
+  const total = trays + tubs;
+  const totalLabel = formatTraysTubs(trays, tubs);
 
   const selected = useMemo(() => {
     const byId = new Map((flavours.data ?? []).map((f) => [f.id, f]));
     return Object.entries(counts)
-      .map(([id, qty]) => ({ flavour: byId.get(id), qty }))
-      .filter((x): x is { flavour: Flavour; qty: number } => Boolean(x.flavour))
-      .sort((a, b) => a.flavour.name.localeCompare(b.flavour.name));
+      .map(([key, qty]) => {
+        const { id, unit } = parseKey(key);
+        return { flavour: byId.get(id), qty, unit };
+      })
+      .filter((x): x is { flavour: Flavour; qty: number; unit: Unit } => Boolean(x.flavour))
+      .sort((a, b) => a.flavour.name.localeCompare(b.flavour.name) || a.unit.localeCompare(b.unit));
   }, [counts, flavours.data]);
 
-  const removeLine = (id: string) =>
+  const removeLine = (key: string) =>
     setCounts((prev) => {
       const next = { ...prev };
-      delete next[id];
+      delete next[key];
       return next;
     });
 
@@ -111,7 +139,7 @@ function SoftFreezerOrder() {
     mutationFn: () => applyMovements(lines, "removal", "Soft freezer order"),
     onSuccess: () => {
       qc.invalidateQueries();
-      toast.success(`${total} tray${total === 1 ? "" : "s"} sent to the display freezer`);
+      toast.success(`${totalLabel} sent to the display freezer`);
       setCounts({});
       setReviewing(false);
       router.navigate({ to: "/" });
@@ -127,16 +155,23 @@ function SoftFreezerOrder() {
             These trays will be removed from stock and counted as gone to the display freezer.
           </p>
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {selected.map(({ flavour, qty }) => (
-              <div key={flavour.id} className="flex items-center gap-3 px-4 py-3">
+            {selected.map(({ flavour, qty, unit }) => (
+              <div key={k(flavour.id, unit)} className="flex items-center gap-3 px-4 py-3">
                 <span className="min-w-0 flex-1 truncate font-display text-base">
                   {flavour.name}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    unit === "tub" ? "bg-sky text-sky-foreground" : "bg-cream text-cream-foreground"
+                  }`}
+                >
+                  {unit === "tub" ? "Tubs" : "Trays"}
                 </span>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
                     aria-label={`Remove one ${flavour.name}`}
-                    onClick={() => bump(flavour, -1)}
+                    onClick={() => bump(flavour, -1, unit)}
                     className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90"
                   >
                     <Minus className="size-4" />
@@ -147,7 +182,7 @@ function SoftFreezerOrder() {
                   <button
                     type="button"
                     aria-label={`Add one ${flavour.name}`}
-                    onClick={() => bump(flavour, 1)}
+                    onClick={() => bump(flavour, 1, unit)}
                     className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition active:scale-90"
                   >
                     <Plus className="size-4" />
@@ -156,7 +191,7 @@ function SoftFreezerOrder() {
                 <button
                   type="button"
                   aria-label={`Remove ${flavour.name} from order`}
-                  onClick={() => removeLine(flavour.id)}
+                  onClick={() => removeLine(k(flavour.id, unit))}
                   className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted active:scale-90"
                 >
                   <X className="size-4" />
@@ -171,9 +206,7 @@ function SoftFreezerOrder() {
           </div>
           <div className="flex items-center justify-between px-1 font-display">
             <span className="text-muted-foreground">Total</span>
-            <span className="text-lg">
-              {total} tray{total === 1 ? "" : "s"}
-            </span>
+            <span className="text-lg">{totalLabel}</span>
           </div>
         </div>
 
@@ -194,7 +227,7 @@ function SoftFreezerOrder() {
               onClick={() => submit.mutate()}
             >
               <Check className="mr-2 size-6" />
-              Confirm · {total} tray{total === 1 ? "" : "s"} to display freezer
+              Confirm · {totalLabel} to display freezer
             </Button>
           </div>
         </div>
@@ -228,25 +261,24 @@ function SoftFreezerOrder() {
               </h2>
               <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
                 {list.map((f) => {
-                  const n = counts[f.id] ?? 0;
-                  return (
-                    <div key={f.id} className="flex items-center gap-2 px-3 py-1.5">
-                      <span className="min-w-0 flex-1 truncate font-display text-sm">{f.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {f.stock_qty} in stock
-                      </span>
-                      <div className="flex shrink-0 items-center gap-1">
+                  const counter = (unit: Unit) => {
+                    const n = counts[k(f.id, unit)] ?? 0;
+                    return (
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <span className="w-7 text-right text-[10px] font-semibold uppercase text-muted-foreground">
+                          {unit === "tub" ? "Tub" : "Tray"}
+                        </span>
                         <button
                           type="button"
-                          aria-label={`Remove one ${f.name}`}
+                          aria-label={`Remove one ${f.name} ${unit}`}
                           disabled={n === 0}
-                          onClick={() => bump(f, -1)}
+                          onClick={() => bump(f, -1, unit)}
                           className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90 disabled:opacity-30"
                         >
                           <Minus className="size-4" />
                         </button>
                         <span
-                          className={`w-7 text-center font-display text-base ${
+                          className={`w-6 text-center font-display text-base ${
                             n > 0 ? "text-primary" : "text-muted-foreground"
                           }`}
                         >
@@ -254,13 +286,27 @@ function SoftFreezerOrder() {
                         </span>
                         <button
                           type="button"
-                          aria-label={`Add one ${f.name}`}
-                          onClick={() => bump(f, 1)}
-                          className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition active:scale-90"
+                          aria-label={`Add one ${f.name} ${unit}`}
+                          onClick={() => bump(f, 1, unit)}
+                          className={`flex size-8 items-center justify-center rounded-full transition active:scale-90 ${
+                            unit === "tub" ? "bg-sky text-sky-foreground" : "bg-primary text-primary-foreground"
+                          }`}
                         >
                           <Plus className="size-4" />
                         </button>
                       </div>
+                    );
+                  };
+                  return (
+                    <div key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5">
+                      <span className="min-w-0 flex-1 truncate font-display text-sm">
+                        {f.name}
+                        <span className="ml-2 font-sans text-xs text-muted-foreground">
+                          {f.stock_qty} trays · {f.tub_qty ?? 0} tubs
+                        </span>
+                      </span>
+                      {counter("tray")}
+                      {counter("tub")}
                     </div>
                   );
                 })}
@@ -278,7 +324,7 @@ function SoftFreezerOrder() {
               onClick={() => setReviewing(true)}
             >
               <Check className="mr-2 size-6" />
-              Review changes · {total} tray{total === 1 ? "" : "s"}
+              Review changes · {totalLabel}
             </Button>
           </div>
         </div>
