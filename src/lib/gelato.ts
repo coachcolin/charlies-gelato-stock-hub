@@ -212,12 +212,14 @@ export async function applyMovements(
   kind: MovementKind,
   note?: string,
   orderId?: string,
+  account?: string,
 ) {
   const res = await db.rpc("apply_stock_movements", {
     _movements: lines,
     _kind: kind,
     _note: note ?? null,
     _order_id: orderId ?? null,
+    _account: account ?? null,
   });
   if (res.error) throw new Error(res.error.message);
   return res.data as string;
