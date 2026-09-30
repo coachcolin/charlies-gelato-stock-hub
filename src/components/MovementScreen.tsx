@@ -12,6 +12,7 @@ import {
   applyMovements,
   fetchFlavours,
   fetchMovements,
+  fetchOrders,
   popularIds,
   type Flavour,
   formatTraysTubs,
@@ -39,9 +40,23 @@ export function MovementScreen({
   const router = useRouter();
   const [picked, setPicked] = useState<Flavour | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
+  const [account, setAccount] = useState("Charlie's Shop");
+  const [otherAccount, setOtherAccount] = useState("");
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(60) });
+  const orders = useQuery({
+    queryKey: ["orders"],
+    queryFn: fetchOrders,
+    enabled: kind === "removal",
+  });
+
+  const wholesalers = Array.from(
+    new Set((orders.data ?? []).map((o) => o.wholesaler).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const resolvedAccount =
+    account === "__other__" ? otherAccount.trim() : account;
 
   const active = (flavours.data ?? []).filter((f) => f.active);
   const popular = popularIds(flavours.data ?? [], movements.data ?? []);
