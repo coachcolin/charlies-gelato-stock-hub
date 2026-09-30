@@ -19,7 +19,15 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
 
-import { applyMovements, db, fetchFlavours, fetchOrders, type Flavour } from "@/lib/gelato";
+import {
+  applyMovements,
+  db,
+  fetchFlavours,
+  fetchOrders,
+  formatTraysTubs,
+  type Flavour,
+  type Unit,
+} from "@/lib/gelato";
 
 export const Route = createFileRoute("/wholesale")({
   head: () => ({
@@ -77,6 +85,7 @@ function WholesalePage() {
             flavour_id: match?.id ?? null,
             flavour_name: match?.name ?? r.name,
             qty: r.qty,
+            unit: r.unit,
           };
         });
         const orderRes = await db
@@ -177,7 +186,10 @@ function WholesalePage() {
               <p key={o.orderNumber ?? o.customer} className="flex justify-between gap-3">
                 <span className="truncate">{o.customer}</span>
                 <span className="shrink-0 text-muted-foreground">
-                  {o.rows.reduce((s, r) => s + r.qty, 0)} trays
+                  {formatTraysTubs(
+                    o.rows.filter((r) => r.unit !== "tub").reduce((s, r) => s + r.qty, 0),
+                    o.rows.filter((r) => r.unit === "tub").reduce((s, r) => s + r.qty, 0),
+                  )}
                 </span>
               </p>
             ))}
@@ -233,8 +245,10 @@ function WholesalePage() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {o.items.reduce((s, i) => s + i.qty, 0)} trays ·{" "}
-                {o.items.map((i) => `${i.flavour_name} ×${i.qty}`).join(", ")}
+                {itemsTotal(o.items)} ·{" "}
+                {o.items
+                  .map((i) => `${i.flavour_name} ×${i.qty}${i.unit === "tub" ? " tubs" : ""}`)
+                  .join(", ")}
               </p>
             </div>
           ))}
@@ -255,11 +269,14 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries();
 
-  const stockOf = (id: string | null) =>
-    id ? (flavours.find((f) => f.id === id)?.stock_qty ?? 0) : 0;
+  const stockOf = (id: string | null, unit: Unit = "tray") => {
+    const f = id ? flavours.find((x) => x.id === id) : undefined;
+    if (!f) return 0;
+    return unit === "tub" ? (f.tub_qty ?? 0) : f.stock_qty;
+  };
 
   const shortfalls = useMemo(
-    () => order.items.filter((i) => i.flavour_id && i.qty > stockOf(i.flavour_id)),
+    () => order.items.filter((i) => i.flavour_id && i.qty > stockOf(i.flavour_id, i.unit)),
     [order.items, flavours],
   );
 
@@ -273,8 +290,8 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
   });
 
   const patchItem = useMutation({
-    mutationFn: async ({ id, qty }: { id: string; qty: number }) => {
-      const res = await db.from("wholesale_order_items").update({ qty }).eq("id", id);
+    mutationFn: async ({ id, ...patch }: { id: string; qty?: number; unit?: Unit }) => {
+      const res = await db.from("wholesale_order_items").update(patch).eq("id", id);
       if (res.error) throw new Error(res.error.message);
     },
     onSuccess: refresh,
@@ -304,7 +321,7 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
     mutationFn: async () => {
       const lines = order.items
         .filter((i) => i.flavour_id)
-        .map((i) => ({ flavour_id: i.flavour_id as string, qty: -i.qty }));
+        .map((i) => ({ flavour_id: i.flavour_id as string, qty: -i.qty, unit: i.unit }));
       await applyMovements(lines, "wholesale", `Wholesale: ${order.wholesaler}`, order.id);
       const res = await db
         .from("wholesale_orders")
@@ -340,7 +357,7 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
           aria-label="Wholesaler"
         />
         <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-          {order.items.reduce((s, i) => s + i.qty, 0)} trays
+          {itemsTotal(order.items)}
         </span>
       </div>
       {order.reference ? (
@@ -372,13 +389,17 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
       {shortfalls.length > 0 ? (
         <p className="mt-3 flex items-start gap-2 rounded-xl bg-accent px-3 py-2 text-sm text-accent-foreground">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          Not enough stock for {shortfalls.map((s) => s.flavour_name).join(", ")}.
+          Not enough stock for{" "}
+          {shortfalls
+            .map((s) => `${s.flavour_name}${s.unit === "tub" ? " (tubs)" : ""}`)
+            .join(", ")}
+          .
         </p>
       ) : null}
 
       <div className="mt-3 space-y-2">
         {order.items.map((i) => {
-          const stock = stockOf(i.flavour_id);
+          const stock = stockOf(i.flavour_id, i.unit);
           const short = Boolean(i.flavour_id) && i.qty > stock;
           return (
             <div key={i.id} className="flex items-center gap-2">
@@ -388,7 +409,7 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
                   <span
                     className={`text-xs ${short ? "text-primary" : "text-muted-foreground"}`}
                   >
-                    {stock} in stock
+                    {stock} {i.unit === "tub" ? "tubs" : "trays"} in stock
                   </span>
                 ) : (
                   <select
@@ -408,6 +429,10 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
                   </select>
                 )}
               </span>
+              <UnitToggle
+                unit={i.unit}
+                onChange={(unit) => patchItem.mutate({ id: i.id, unit })}
+              />
               <Input
                 type="number"
                 inputMode="numeric"
@@ -466,7 +491,7 @@ function ManualOrderDialog({
   const [reference, setReference] = useState("");
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [picked, setPicked] = useState<{ flavour: Flavour; qty: number }[]>([]);
+  const [picked, setPicked] = useState<{ flavour: Flavour; qty: number; unit: Unit }[]>([]);
   const [isFuture, setIsFuture] = useState(false);
   const [sendDate, setSendDate] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -490,15 +515,14 @@ function ManualOrderDialog({
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  const pickedIds = new Set(picked.map((p) => p.flavour.id));
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     return flavours
-      .filter((f) => f.active && !pickedIds.has(f.id))
+      .filter((f) => f.active)
       .filter((f) => !q || f.name.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, 8);
-  }, [flavours, query, pickedIds]);
+  }, [flavours, query]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -519,6 +543,7 @@ function ManualOrderDialog({
           flavour_id: p.flavour.id,
           flavour_name: p.flavour.name,
           qty: p.qty,
+          unit: p.unit,
         })),
       );
       if (itemsRes.error) throw new Error(itemsRes.error.message);
@@ -531,7 +556,7 @@ function ManualOrderDialog({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const totalTrays = picked.reduce((s, p) => s + p.qty, 0);
+  const totalLabel = itemsTotal(picked);
   const canSave = customer.trim().length > 0 && picked.length > 0 && picked.every((p) => p.qty > 0);
 
   return (
@@ -589,7 +614,7 @@ function ManualOrderDialog({
                     key={f.id}
                     type="button"
                     onClick={() => {
-                      setPicked((p) => [...p, { flavour: f, qty: 1 }]);
+                      setPicked((p) => [...p, { flavour: f, qty: 1, unit: "tray" }]);
                       setQuery("");
                       setMenuOpen(false);
                     }}
@@ -605,11 +630,17 @@ function ManualOrderDialog({
 
           {picked.length > 0 ? (
             <div className="space-y-2">
-              {picked.map((p) => (
-                <div key={p.flavour.id} className="flex items-center gap-2">
+              {picked.map((p, idx) => (
+                <div key={`${p.flavour.id}-${idx}`} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
                     {p.flavour.name}
                   </span>
+                  <UnitToggle
+                    unit={p.unit}
+                    onChange={(unit) =>
+                      setPicked((list) => list.map((x, j) => (j === idx ? { ...x, unit } : x)))
+                    }
+                  />
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -617,8 +648,8 @@ function ManualOrderDialog({
                     value={p.qty}
                     onChange={(e) =>
                       setPicked((list) =>
-                        list.map((x) =>
-                          x.flavour.id === p.flavour.id
+                        list.map((x, j) =>
+                          j === idx
                             ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
                             : x,
                         ),
@@ -630,7 +661,7 @@ function ManualOrderDialog({
                   <button
                     type="button"
                     onClick={() =>
-                      setPicked((list) => list.filter((x) => x.flavour.id !== p.flavour.id))
+                      setPicked((list) => list.filter((_, j) => j !== idx))
                     }
                     className="flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
                     aria-label={`Remove ${p.flavour.name}`}
@@ -665,10 +696,32 @@ function ManualOrderDialog({
           >
             {save.isPending
               ? "Saving…"
-              : `Save order${picked.length ? ` · ${totalTrays} trays` : ""}`}
+              : `Save order${picked.length ? ` · ${totalLabel}` : ""}`}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function itemsTotal(items: { qty: number; unit: Unit }[]) {
+  return formatTraysTubs(
+    items.filter((i) => i.unit !== "tub").reduce((s, i) => s + i.qty, 0),
+    items.filter((i) => i.unit === "tub").reduce((s, i) => s + i.qty, 0),
+  );
+}
+
+function UnitToggle({ unit, onChange }: { unit: Unit; onChange: (u: Unit) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(unit === "tub" ? "tray" : "tub")}
+      className={`h-11 shrink-0 rounded-xl px-3 font-display text-sm ${
+        unit === "tub" ? "bg-sky text-sky-foreground" : "bg-cream text-cream-foreground"
+      }`}
+      aria-label="Switch between trays and tubs"
+    >
+      {unit === "tub" ? "Tubs" : "Trays"}
+    </button>
   );
 }

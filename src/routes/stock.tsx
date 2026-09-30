@@ -18,6 +18,7 @@ import {
   fetchFlavours,
   fetchFreezers,
   fetchSeason,
+  trayEquivalents,
   type Flavour,
 } from "@/lib/gelato";
 
@@ -40,12 +41,14 @@ export const Route = createFileRoute("/stock")({
   component: StockPage,
 });
 
-type SortKey = "alpha" | "high" | "low" | "priority";
+type SortKey = "alpha" | "high" | "low" | "tubsHigh" | "tubsLow" | "priority";
 
 const SORT_LABELS: Record<SortKey, string> = {
   alpha: "Alphabetical",
-  high: "Highest stock",
-  low: "Lowest stock",
+  high: "Most trays",
+  low: "Fewest trays",
+  tubsHigh: "Most tubs",
+  tubsLow: "Fewest tubs",
   priority: "Popular flavours",
 };
 
@@ -68,6 +71,10 @@ function StockPage() {
         return filtered.sort((a, b) => b.stock_qty - a.stock_qty || byName(a, b));
       case "low":
         return filtered.sort((a, b) => a.stock_qty - b.stock_qty || byName(a, b));
+      case "tubsHigh":
+        return filtered.sort((a, b) => (b.tub_qty ?? 0) - (a.tub_qty ?? 0) || byName(a, b));
+      case "tubsLow":
+        return filtered.sort((a, b) => (a.tub_qty ?? 0) - (b.tub_qty ?? 0) || byName(a, b));
       case "priority":
         return filtered.sort(
           (a, b) => Number(b.priority) - Number(a.priority) || byName(a, b),
@@ -76,13 +83,15 @@ function StockPage() {
   }, [flavours.data, q, sort]);
 
   const totalTrays = (flavours.data ?? []).reduce((s, f) => s + f.stock_qty, 0);
+  const totalTubs = (flavours.data ?? []).reduce((s, f) => s + (f.tub_qty ?? 0), 0);
+  const used = Math.round((flavours.data ?? []).reduce((s, f) => s + trayEquivalents(f), 0));
   const totalCap = (freezers.data ?? []).reduce((s, f) => s + f.capacity_trays, 0);
-  const pct = totalCap ? Math.min(100, Math.round((totalTrays / totalCap) * 100)) : 0;
+  const pct = totalCap ? Math.min(100, Math.round((used / totalCap) * 100)) : 0;
 
   return (
     <AppShell
       title="Current Stock Levels"
-      subtitle={`${totalTrays} trays across ${(freezers.data ?? []).length} freezers`}
+      subtitle={`${totalTrays} trays · ${totalTubs} tubs across ${(freezers.data ?? []).length} freezers`}
     >
       <section className="mb-6 space-y-3">
         <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -92,16 +101,19 @@ function StockPage() {
           <div className="flex items-baseline justify-between gap-2">
             <p className="font-display text-base">All freezers</p>
             <p className="font-display text-base">
-              {totalTrays} / {totalCap} trays · {pct}%
+              {used} / {totalCap} trays · {pct}%
             </p>
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Counts 5 tubs as the space of 1 tray.
+          </p>
           <div className="mt-2 h-3 overflow-hidden rounded-full bg-muted">
             <div
               className={`h-full rounded-full ${pct > 90 ? "bg-primary" : "bg-sky"}`}
               style={{ width: `${pct}%` }}
             />
           </div>
-          {totalCap > 0 && totalTrays > totalCap ? (
+          {totalCap > 0 && used > totalCap ? (
             <p className="mt-2 text-sm text-muted-foreground">
               Stock on record exceeds total freezer capacity.
             </p>
@@ -135,7 +147,7 @@ function StockPage() {
       </div>
 
       <p className="mb-3 px-1 text-xs text-muted-foreground">
-        Chips highlight flavours vs their {season.data ?? "mid"} season minimum recommended:{" "}
+        Tray chips highlight flavours vs their {season.data ?? "mid"} season minimum recommended:{" "}
         <span className="font-semibold text-primary">below minimum</span> needs attention,{" "}
         <span className="font-semibold text-accent-foreground">watch</span> is within 2 trays of
         it.
@@ -147,15 +159,15 @@ function StockPage() {
           const below = min > 0 && f.stock_qty < min;
           const watch = min > 0 && !below && f.stock_qty <= min + 2;
           return (
-            <div key={f.id} className="surface flex min-h-16 items-center gap-3 px-4 py-3">
+            <div key={f.id} className="surface flex min-h-16 min-w-0 items-center gap-2 px-3 py-3">
               {f.image_url ? (
                 <img
                   src={f.image_url}
                   alt=""
-                  className="size-11 shrink-0 rounded-full object-cover"
+                  className="hidden size-11 shrink-0 rounded-full object-cover sm:block"
                 />
               ) : (
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-cream font-display text-base text-cream-foreground">
+                <span className="hidden size-11 shrink-0 items-center justify-center rounded-full bg-cream sm:flex font-display text-base text-cream-foreground">
                   {f.name.slice(0, 2)}
                 </span>
               )}
@@ -171,8 +183,15 @@ function StockPage() {
                   {below ? " · below minimum" : watch ? " · watch" : ""}
                 </span>
               </span>
+              <span className="flex shrink-0 flex-col items-center">
+                <span className="rounded-full bg-sky/30 px-2.5 py-1 font-display text-base text-foreground">
+                  {f.tub_qty ?? 0}
+                </span>
+                <span className="text-[10px] font-semibold uppercase text-muted-foreground">tubs</span>
+              </span>
+              <span className="flex shrink-0 flex-col items-center">
               <span
-                className={`shrink-0 rounded-full px-3 py-1.5 font-display text-lg ${
+                className={`rounded-full px-2.5 py-1 font-display text-base ${
                   below
                     ? "bg-primary text-primary-foreground"
                     : watch
@@ -181,6 +200,8 @@ function StockPage() {
                 }`}
               >
                 {f.stock_qty}
+              </span>
+                <span className="text-[10px] font-semibold uppercase text-muted-foreground">trays</span>
               </span>
             </div>
           );

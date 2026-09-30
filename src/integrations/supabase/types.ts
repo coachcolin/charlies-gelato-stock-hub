@@ -47,6 +47,7 @@ export type Database = {
           name: string
           priority: boolean
           stock_qty: number
+          tub_qty: number
           updated_at: string
         }
         Insert: {
@@ -63,6 +64,7 @@ export type Database = {
           name: string
           priority?: boolean
           stock_qty?: number
+          tub_qty?: number
           updated_at?: string
         }
         Update: {
@@ -79,6 +81,7 @@ export type Database = {
           name?: string
           priority?: boolean
           stock_qty?: number
+          tub_qty?: number
           updated_at?: string
         }
         Relationships: []
@@ -124,9 +127,11 @@ export type Database = {
           note: string | null
           position: number
           produced_qty: number | null
+          produced_tubs: number | null
           reason: string | null
           report_id: string
           suggested_qty: number
+          suggested_tubs: number
         }
         Insert: {
           created_at?: string
@@ -138,9 +143,11 @@ export type Database = {
           note?: string | null
           position?: number
           produced_qty?: number | null
+          produced_tubs?: number | null
           reason?: string | null
           report_id: string
           suggested_qty?: number
+          suggested_tubs?: number
         }
         Update: {
           created_at?: string
@@ -152,9 +159,11 @@ export type Database = {
           note?: string | null
           position?: number
           produced_qty?: number | null
+          produced_tubs?: number | null
           reason?: string | null
           report_id?: string
           suggested_qty?: number
+          suggested_tubs?: number
         }
         Relationships: [
           {
@@ -214,6 +223,7 @@ export type Database = {
           order_id: string | null
           qty: number
           session_id: string | null
+          unit: string
         }
         Insert: {
           created_at?: string
@@ -225,6 +235,7 @@ export type Database = {
           order_id?: string | null
           qty: number
           session_id?: string | null
+          unit?: string
         }
         Update: {
           created_at?: string
@@ -236,6 +247,7 @@ export type Database = {
           order_id?: string | null
           qty?: number
           session_id?: string | null
+          unit?: string
         }
         Relationships: [
           {
@@ -262,6 +274,7 @@ export type Database = {
           id: string
           order_id: string
           qty: number
+          unit: string
         }
         Insert: {
           created_at?: string
@@ -270,6 +283,7 @@ export type Database = {
           id?: string
           order_id: string
           qty?: number
+          unit?: string
         }
         Update: {
           created_at?: string
@@ -278,6 +292,7 @@ export type Database = {
           id?: string
           order_id?: string
           qty?: number
+          unit?: string
         }
         Relationships: [
           {

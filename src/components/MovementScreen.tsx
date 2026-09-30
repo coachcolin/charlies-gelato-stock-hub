@@ -14,10 +14,13 @@ import {
   fetchMovements,
   popularIds,
   type Flavour,
+  formatTraysTubs,
   type MovementKind,
+  type Unit,
+  unitLabel,
 } from "@/lib/gelato";
 
-type Line = { id: string; name: string; qty: number };
+type Line = { id: string; name: string; qty: number; unit: Unit };
 
 export function MovementScreen({
   title,
@@ -46,31 +49,31 @@ export function MovementScreen({
   const submit = useMutation({
     mutationFn: () =>
       applyMovements(
-        lines.map((l) => ({ flavour_id: l.id, qty: sign * l.qty })),
+        lines.map((l) => ({ flavour_id: l.id, qty: sign * l.qty, unit: l.unit })),
         kind,
       ),
     onSuccess: () => {
-      const total = lines.reduce((s, l) => s + l.qty, 0);
       qc.invalidateQueries();
-      toast.success(`${total} tray${total === 1 ? "" : "s"} ${sign > 0 ? "added" : "removed"}`);
+      toast.success(`${formatTraysTubs(trays, tubs)} ${sign > 0 ? "added" : "removed"}`);
       setLines([]);
       router.navigate({ to: "/" });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const addLine = (qty: number) => {
+  const addLine = (qty: number, unit: Unit) => {
     if (!picked) return;
     setLines((prev) => {
-      const found = prev.find((l) => l.id === picked.id);
+      const found = prev.find((l) => l.id === picked.id && l.unit === unit);
       if (found)
-        return prev.map((l) => (l.id === picked.id ? { ...l, qty: l.qty + qty } : l));
-      return [...prev, { id: picked.id, name: picked.name, qty }];
+        return prev.map((l) => (l === found ? { ...l, qty: l.qty + qty } : l));
+      return [...prev, { id: picked.id, name: picked.name, qty, unit }];
     });
     setPicked(null);
   };
 
-  const total = lines.reduce((s, l) => s + l.qty, 0);
+  const trays = lines.filter((l) => l.unit === "tray").reduce((s, l) => s + l.qty, 0);
+  const tubs = lines.filter((l) => l.unit === "tub").reduce((s, l) => s + l.qty, 0);
 
   return (
     <AppShell title={title} subtitle={subtitle}>
@@ -80,7 +83,7 @@ export function MovementScreen({
         onPick={setPicked}
         renderMeta={(f) => (
           <span className="shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
-            {f.stock_qty} in stock
+            {f.stock_qty} trays · {f.tub_qty ?? 0} tubs
           </span>
         )}
       />
@@ -91,11 +94,12 @@ export function MovementScreen({
         title={picked?.name ?? ""}
         description={
           picked
-            ? `${picked.stock_qty} trays in stock · how many trays are you ${sign > 0 ? "adding" : "taking"}?`
+            ? `${picked.stock_qty} trays · ${picked.tub_qty ?? 0} tubs in stock · how many are you ${sign > 0 ? "adding" : "taking"}?`
             : undefined
         }
         confirmLabel={sign > 0 ? "Add to list" : "Add to list"}
         onConfirm={addLine}
+        showUnit
       />
 
       {lines.length > 0 ? (
@@ -104,13 +108,13 @@ export function MovementScreen({
             <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
               {lines.map((l) => (
                 <button
-                  key={l.id}
+                  key={`${l.id}-${l.unit}`}
                   type="button"
-                  onClick={() => setLines((p) => p.filter((x) => x.id !== l.id))}
+                  onClick={() => setLines((p) => p.filter((x) => x !== l))}
                   className="flex items-center gap-2 rounded-full bg-cream px-3 py-2 text-sm font-semibold text-cream-foreground"
                 >
                   <span>
-                    {l.name} × {l.qty}
+                    {l.name} × {l.qty} {unitLabel(l.unit, l.qty)}
                   </span>
                   <Trash2 className="size-4 opacity-60" />
                 </button>
@@ -122,7 +126,7 @@ export function MovementScreen({
               onClick={() => submit.mutate()}
             >
               <Check className="mr-2 size-6" />
-              {confirmLabel} · {total} tray{total === 1 ? "" : "s"}
+              {confirmLabel} · {formatTraysTubs(trays, tubs)}
             </Button>
           </div>
         </div>

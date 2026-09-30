@@ -22,6 +22,7 @@ export type Flavour = {
   category: FlavourCategory;
   image_url: string | null;
   stock_qty: number;
+  tub_qty: number;
   desired_peak: number;
   desired_mid: number;
   desired_low: number;
@@ -36,6 +37,27 @@ export type Freezer = {
   current_trays: number;
   position: number;
 };
+
+export type Unit = "tray" | "tub";
+
+/** Freezer space: this many tubs take the room of one tray. */
+export const TUBS_PER_TRAY = 5;
+
+export function unitLabel(unit: Unit, n: number) {
+  return unit === "tub" ? (n === 1 ? "tub" : "tubs") : n === 1 ? "tray" : "trays";
+}
+
+/** "3 trays + 4 tubs" style summary. */
+export function formatTraysTubs(trays: number, tubs: number) {
+  const parts: string[] = [];
+  if (trays || !tubs) parts.push(`${trays} ${unitLabel("tray", trays)}`);
+  if (tubs) parts.push(`${tubs} ${unitLabel("tub", tubs)}`);
+  return parts.join(" + ");
+}
+
+export function trayEquivalents(f: { stock_qty: number; tub_qty: number }) {
+  return f.stock_qty + (f.tub_qty ?? 0) / TUBS_PER_TRAY;
+}
 
 export type MovementKind =
   | "addition"
@@ -53,6 +75,7 @@ export type Movement = {
   note: string | null;
   session_id: string | null;
   order_id: string | null;
+  unit: Unit;
   created_at: string;
 };
 
@@ -73,6 +96,7 @@ export type WholesaleOrderItem = {
   flavour_id: string | null;
   flavour_name: string;
   qty: number;
+  unit: Unit;
 };
 
 export type ProductionReport = {
@@ -92,6 +116,8 @@ export type ProductionItem = {
   flavour_name: string;
   suggested_qty: number;
   produced_qty: number | null;
+  suggested_tubs: number;
+  produced_tubs: number | null;
   done: boolean;
   reason: string | null;
   note: string | null;
@@ -182,7 +208,7 @@ export async function setDayCapacity(season: Season, trays: number) {
 }
 
 export async function applyMovements(
-  lines: { flavour_id: string; qty: number }[],
+  lines: { flavour_id: string; qty: number; unit?: Unit }[],
   kind: MovementKind,
   note?: string,
   orderId?: string,
@@ -264,6 +290,8 @@ export type Suggestion = {
   stock: number;
   weeklyUsage: number;
   committed: number;
+  /** Tubs owed to active wholesale orders. */
+  tubsNeeded: number;
   desired: number;
   priority: boolean;
   belowMin?: boolean;
@@ -286,16 +314,22 @@ export function buildSuggestions(
   for (const m of movements) {
     if (!m.flavour_id) continue;
     if (m.kind !== "removal" && m.kind !== "wholesale") continue;
+    if (m.unit === "tub") continue;
     if (new Date(m.created_at).getTime() < cutoff) continue;
     sold.set(m.flavour_id, (sold.get(m.flavour_id) ?? 0) + Math.abs(m.qty));
   }
 
   const committed = new Map<string, number>();
+  const tubsOwed = new Map<string, number>();
   const committedBy = new Map<string, Map<string, number>>();
   for (const o of activeOrders) {
     if (o.status !== "active") continue;
     for (const i of o.items) {
       if (!i.flavour_id) continue;
+      if (i.unit === "tub") {
+        tubsOwed.set(i.flavour_id, (tubsOwed.get(i.flavour_id) ?? 0) + i.qty);
+        continue;
+      }
       committed.set(i.flavour_id, (committed.get(i.flavour_id) ?? 0) + i.qty);
       const perCustomer = committedBy.get(i.flavour_id) ?? new Map<string, number>();
       perCustomer.set(o.wholesaler, (perCustomer.get(o.wholesaler) ?? 0) + i.qty);
@@ -336,6 +370,8 @@ export function buildSuggestions(
         }
       }
       bits.push(`${f.stock_qty} in stock vs ${desired} minimum`);
+      const tubs = tubsOwed.get(f.id) ?? 0;
+      if (tubs > 0) bits.push(`${tubs} tubs on wholesale orders (${f.tub_qty ?? 0} tubs in stock)`);
       if (f.priority) bits.push("priority flavour");
 
       return {
@@ -346,6 +382,7 @@ export function buildSuggestions(
         stock: f.stock_qty,
         weeklyUsage,
         committed: owed,
+        tubsNeeded: Math.max(0, (tubsOwed.get(f.id) ?? 0) - (f.tub_qty ?? 0)),
         desired,
         priority: f.priority,
         belowMin,

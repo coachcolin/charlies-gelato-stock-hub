@@ -1,4 +1,10 @@
-export type ParsedRow = { name: string; qty: number };
+export type ParsedRow = { name: string; qty: number; unit: "tray" | "tub" };
+
+const UNIT_KEYS = ["unit", "size", "format", "pack", "type", "variant", "container"];
+
+function unitFrom(...texts: string[]): "tray" | "tub" {
+  return texts.some((t) => /\btubs?\b/i.test(t)) ? "tub" : "tray";
+}
 
 function splitLine(line: string, delim: string): string[] {
   const out: string[] = [];
@@ -103,6 +109,16 @@ export function parseOrderCsv(text: string): CsvResult {
   const refCol = findCol(REF_KEYS);
   if (nameCol < 0) nameCol = 0;
   if (qtyCol < 0) qtyCol = headers.length - 1;
+  let unitCol = -1;
+  for (const k of UNIT_KEYS) {
+    const idx = headers.findIndex(
+      (h, i) => i !== qtyCol && i !== nameCol && (h === k || h.includes(k)) && !/status|date/.test(h),
+    );
+    if (idx >= 0) {
+      unitCol = idx;
+      break;
+    }
+  }
 
   const map = new Map<string, ParsedOrder>();
   let skippedStatus = 0;
@@ -138,9 +154,10 @@ export function parseOrderCsv(text: string): CsvResult {
       map.set(key, order);
     }
 
-    const existing = order.rows.find((r) => r.name === name);
+    const unit = unitFrom(unitCol >= 0 ? (cells[unitCol] ?? "") : "", name);
+    const existing = order.rows.find((r) => r.name === name && r.unit === unit);
     if (existing) existing.qty += Math.round(Math.abs(qty));
-    else order.rows.push({ name, qty: Math.round(Math.abs(qty)) });
+    else order.rows.push({ name, qty: Math.round(Math.abs(qty)), unit });
   }
 
   return { orders: [...map.values()], skippedStatus, headers };
@@ -149,7 +166,7 @@ export function parseOrderCsv(text: string): CsvResult {
 const norm = (s: string) =>
   s
     .toLowerCase()
-    .replace(/gelato|sorbetto|sorbetti|sorbet|flavour|tray|trays|\d+\s?l\b/g, "")
+    .replace(/gelato|sorbetto|sorbetti|sorbet|flavour|trays?|tubs?|\d+\s?(l|ml)\b/g, "")
     .replace(/[^a-z0-9]/g, "");
 
 /** Best-effort match of an imported line description to a known flavour. */
