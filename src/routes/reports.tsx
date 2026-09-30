@@ -125,7 +125,8 @@ function ReportsPage() {
   const [from, setFrom] = useState(isoDay(new Date(Date.now() - 30 * 86400000)));
   const [to, setTo] = useState(isoDay(new Date()));
   const [sort, setSort] = useState<SortKey>("tubs");
-  const b = bounds(range, from, to);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const b = useMemo(() => bounds(range, from, to), [range, from, to]);
 
   const sales = useQuery({
     queryKey: ["sales", b.from, b.to],
