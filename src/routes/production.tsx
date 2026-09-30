@@ -25,6 +25,8 @@ import {
   fetchSeason,
   isWeeklySeason,
   recommendedDays,
+  separateDaysNeeded,
+  MAX_DAY_TRAYS,
   scheduleWeek,
   type AllergenGroup,
   type ScheduledSuggestion,
@@ -117,7 +119,10 @@ function ProductionPage() {
   const activeReport = (reports.data ?? []).find((r) => r.status === "active");
 
   const currentSeason = season.data ?? "mid";
-  const dayCapacity = (capacities.data ?? DEFAULT_DAY_CAPACITIES)[currentSeason];
+  const dayCapacity = Math.min(
+    MAX_DAY_TRAYS,
+    (capacities.data ?? DEFAULT_DAY_CAPACITIES)[currentSeason],
+  );
 
   const { scheduled, days } = useMemo(() => {
     if (!flavours.data || !movements.data || !orders.data || !season.data)
@@ -132,7 +137,12 @@ function ProductionPage() {
       0,
     );
     const needed = uncapped.reduce((t, s) => t + s.qty, 0);
-    const dayCount = recommendedDays(needed, dayCapacity, season.data);
+    const dayCount = recommendedDays(
+      needed,
+      dayCapacity,
+      season.data,
+      separateDaysNeeded(uncapped),
+    );
     const fitted = buildSuggestions(
       flavours.data,
       movements.data,
