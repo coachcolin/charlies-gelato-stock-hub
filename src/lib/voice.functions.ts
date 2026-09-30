@@ -25,7 +25,7 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
     form.append("model", "openai/gpt-4o-mini-transcribe");
     form.append(
       "prompt",
-      `A gelato stock take. Expect quantities followed by flavour names, e.g. "one strawberry, three cookie dough". Possible flavours: ${data.flavours.slice(0, 200).join(", ")}`,
+      `A gelato stock take. Expect quantities followed by flavour names, e.g. "one strawberry, three cookie dough tubs". Tubs are small, trays are large. Possible flavours: ${data.flavours.slice(0, 200).join(", ")}`,
     );
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {

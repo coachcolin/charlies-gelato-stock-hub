@@ -58,7 +58,7 @@ export function useVoiceStockTake(
   const recordLabel = options?.recordLabel ?? "Record stock take";
   const hint =
     options?.hint ??
-    "Speak your counts, e.g. “one strawberry, one chocolate, three cookie dough”. You can check and edit the list before it fills in the counts.";
+    "Speak your counts, e.g. “one strawberry, one chocolate, three cookie dough tubs”. Say “tubs” for tubs, otherwise it counts trays. You can check and edit the list before it fills in the counts.";
   const applyLabel = options?.applyLabel ?? "Fill in counts";
   const appliedMessage =
     options?.appliedMessage ?? ((n: number) => `Filled in ${n} flavour${n === 1 ? "" : "s"}`);
