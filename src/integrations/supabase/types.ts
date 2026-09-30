@@ -214,6 +214,7 @@ export type Database = {
       }
       stock_movements: {
         Row: {
+          account: string | null
           created_at: string
           flavour_id: string | null
           flavour_name: string
@@ -226,6 +227,7 @@ export type Database = {
           unit: string
         }
         Insert: {
+          account?: string | null
           created_at?: string
           flavour_id?: string | null
           flavour_name: string
@@ -238,6 +240,7 @@ export type Database = {
           unit?: string
         }
         Update: {
+          account?: string | null
           created_at?: string
           flavour_id?: string | null
           flavour_name?: string

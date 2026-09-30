@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  BarChart3,
   ClipboardList,
   Database,
   FileSpreadsheet,
@@ -75,6 +76,13 @@ const TILES = [
     label: "Wholesale Orders",
     hint: "Import & complete orders",
     icon: FileSpreadsheet,
+    tone: "cream" as const,
+  },
+  {
+    to: "/reports",
+    label: "Sales Reports",
+    hint: "Where trays & tubs are going",
+    icon: BarChart3,
     tone: "cream" as const,
   },
   {
