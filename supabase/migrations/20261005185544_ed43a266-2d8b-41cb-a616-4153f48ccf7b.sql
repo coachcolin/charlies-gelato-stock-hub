@@ -1,0 +1,1 @@
+DELETE FROM public.stock_movements WHERE kind IN ('removal','wholesale');
