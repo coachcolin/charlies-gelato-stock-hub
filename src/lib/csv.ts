@@ -35,7 +35,7 @@ const DELIVERY_KEYS = ["delivery date", "due date", "ship date"];
 const REF_KEYS = ["reference", "invoice"];
 
 /** Order statuses that still need fulfilling. */
-const OPEN_STATUSES = ["processing", "ordered"];
+export const OPEN_STATUSES = ["processing", "ordered"];
 
 const SKIP_PRODUCTS = /^(freight|delivery|shipping|total|subtotal|sum)/i;
 
@@ -46,15 +46,20 @@ export type ParsedOrder = {
   reference: string | null;
   /** ISO yyyy-mm-dd delivery date from the export, when present. */
   deliveryDate: string | null;
+  /** Lowercased status from the export (e.g. "delivered"), null when the file has no status column. */
+  status: string | null;
   rows: ParsedRow[];
 };
 
 export type CsvResult = {
   orders: ParsedOrder[];
-  /** Rows dropped because their status was not open (e.g. Delivered). */
-  skippedStatus: number;
   headers: string[];
 };
+
+/** True when the order's status means it has already gone out (e.g. Delivered). */
+export function isDelivered(o: ParsedOrder): boolean {
+  return o.status !== null && !OPEN_STATUSES.includes(o.status);
+}
 
 /** dd/mm/yyyy hh:mm (or yyyy-mm-dd) -> yyyy-mm-dd */
 function toIsoDate(raw: string): string | null {
