@@ -77,7 +77,7 @@ function toIsoDate(raw: string): string | null {
 export function parseOrderCsv(text: string): CsvResult {
   const clean = text.replace(/\r/g, "");
   const lines = clean.split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { orders: [], skippedStatus: 0, headers: [] };
+  if (lines.length === 0) return { orders: [], headers: [] };
 
   const first = lines[0] ?? "";
   const delim =
@@ -126,7 +126,6 @@ export function parseOrderCsv(text: string): CsvResult {
   }
 
   const map = new Map<string, ParsedOrder>();
-  let skippedStatus = 0;
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const cells = splitLine(lines[i] ?? "", delim);
@@ -135,13 +134,7 @@ export function parseOrderCsv(text: string): CsvResult {
     if (!name || !Number.isFinite(qty) || qty === 0) continue;
     if (SKIP_PRODUCTS.test(name)) continue;
 
-    if (statusCol >= 0) {
-      const status = (cells[statusCol] ?? "").trim().toLowerCase();
-      if (!OPEN_STATUSES.includes(status)) {
-        skippedStatus++;
-        continue;
-      }
-    }
+    const status = statusCol >= 0 ? (cells[statusCol] ?? "").trim().toLowerCase() || null : null;
 
     const orderNumber = orderNoCol >= 0 ? (cells[orderNoCol] ?? "").trim() || null : null;
     const customer = customerCol >= 0 ? (cells[customerCol] ?? "").trim() : "";
@@ -154,6 +147,7 @@ export function parseOrderCsv(text: string): CsvResult {
         customer: customer || "Unknown wholesaler",
         reference: refCol >= 0 ? (cells[refCol] ?? "").trim() || null : null,
         deliveryDate: deliveryCol >= 0 ? toIsoDate(cells[deliveryCol] ?? "") : null,
+        status,
         rows: [],
       };
       map.set(key, order);
