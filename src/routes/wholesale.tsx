@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
+import { isDelivered, matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
 
 import {
   applyMovements,
@@ -58,7 +58,8 @@ function WholesalePage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<ParsedOrder[] | null>(null);
-  const [skipped, setSkipped] = useState(0);
+  const [delivered, setDelivered] = useState<ParsedOrder[] | null>(null);
+  const [openOrders, setOpenOrders] = useState<ParsedOrder[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [exportHelpOpen, setExportHelpOpen] = useState(false);
@@ -139,19 +140,21 @@ function WholesalePage() {
           if (!file) return;
           const parsed = parseOrderCsv(await file.text());
           if (parsed.orders.length === 0) {
-            toast.error(
-              parsed.skippedStatus
-                ? "No orders to import — every line was already delivered."
-                : "Couldn't find any flavour/quantity rows in that file.",
-            );
+            toast.error("Couldn't find any flavour/quantity rows in that file.");
             return;
           }
-          setSkipped(parsed.skippedStatus);
+          const open = parsed.orders.filter((o) => !isDelivered(o));
+          const done = parsed.orders.filter(isDelivered);
           setDueDate(
             parsed.orders.find((o) => o.deliveryDate)?.deliveryDate ??
               new Date().toISOString().slice(0, 10),
           );
-          setPending(parsed.orders);
+          if (done.length > 0) {
+            setOpenOrders(open);
+            setDelivered(done);
+          } else {
+            setPending(open);
+          }
         }}
       />
       <div className="mb-3 flex gap-2">
@@ -206,6 +209,63 @@ function WholesalePage() {
         onSaved={() => qc.invalidateQueries()}
       />
 
+      <Dialog
+        open={Boolean(delivered)}
+        onOpenChange={(o) => {
+          if (o) return;
+          // Closing the dialog counts as excluding the delivered orders.
+          setDelivered(null);
+          if (openOrders.length > 0) setPending(openOrders);
+        }}
+      >
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              {delivered?.length === 1 ? "This order says" : "These orders say"} Delivered
+            </DialogTitle>
+            <DialogDescription>
+              Delivered orders have usually already gone out of stock. Would you like to
+              exclude {delivered?.length === 1 ? "it" : "them"}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-52 space-y-1 overflow-y-auto text-sm">
+            {(delivered ?? []).map((o) => (
+              <p key={o.orderNumber ?? o.customer} className="flex justify-between gap-3">
+                <span className="truncate">{o.customer}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {formatTraysTubs(
+                    o.rows.filter((r) => r.unit !== "tub").reduce((s, r) => s + r.qty, 0),
+                    o.rows.filter((r) => r.unit === "tub").reduce((s, r) => s + r.qty, 0),
+                  )}
+                </span>
+              </p>
+            ))}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="h-14 w-full rounded-2xl text-base"
+              onClick={() => {
+                setDelivered(null);
+                if (openOrders.length > 0) setPending(openOrders);
+                else toast.success("Delivered orders excluded — nothing else to import.");
+              }}
+            >
+              Exclude {delivered?.length === 1 ? "it" : "them"}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-14 w-full rounded-2xl text-base"
+              onClick={() => {
+                setPending([...openOrders, ...(delivered ?? [])]);
+                setDelivered(null);
+              }}
+            >
+              Import anyway
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(pending)} onOpenChange={(o) => !o && setPending(null)}>
         <DialogContent className="rounded-2xl">
           <DialogHeader>
@@ -213,8 +273,7 @@ function WholesalePage() {
               {pending?.length ?? 0} order{pending?.length === 1 ? "" : "s"} to import
             </DialogTitle>
             <DialogDescription>
-              Only orders marked Processing or Ordered are imported
-              {skipped ? ` · ${skipped} delivered lines skipped` : ""}.
+              Check the orders below, pick a due date, then import.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-52 space-y-1 overflow-y-auto text-sm">

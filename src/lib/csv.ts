@@ -35,7 +35,7 @@ const DELIVERY_KEYS = ["delivery date", "due date", "ship date"];
 const REF_KEYS = ["reference", "invoice"];
 
 /** Order statuses that still need fulfilling. */
-const OPEN_STATUSES = ["processing", "ordered"];
+export const OPEN_STATUSES = ["processing", "ordered"];
 
 const SKIP_PRODUCTS = /^(freight|delivery|shipping|total|subtotal|sum)/i;
 
@@ -46,15 +46,20 @@ export type ParsedOrder = {
   reference: string | null;
   /** ISO yyyy-mm-dd delivery date from the export, when present. */
   deliveryDate: string | null;
+  /** Lowercased status from the export (e.g. "delivered"), null when the file has no status column. */
+  status: string | null;
   rows: ParsedRow[];
 };
 
 export type CsvResult = {
   orders: ParsedOrder[];
-  /** Rows dropped because their status was not open (e.g. Delivered). */
-  skippedStatus: number;
   headers: string[];
 };
+
+/** True when the order's status means it has already gone out (e.g. Delivered). */
+export function isDelivered(o: ParsedOrder): boolean {
+  return o.status !== null && !OPEN_STATUSES.includes(o.status);
+}
 
 /** dd/mm/yyyy hh:mm (or yyyy-mm-dd) -> yyyy-mm-dd */
 function toIsoDate(raw: string): string | null {
@@ -72,7 +77,7 @@ function toIsoDate(raw: string): string | null {
 export function parseOrderCsv(text: string): CsvResult {
   const clean = text.replace(/\r/g, "");
   const lines = clean.split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { orders: [], skippedStatus: 0, headers: [] };
+  if (lines.length === 0) return { orders: [], headers: [] };
 
   const first = lines[0] ?? "";
   const delim =
@@ -121,7 +126,6 @@ export function parseOrderCsv(text: string): CsvResult {
   }
 
   const map = new Map<string, ParsedOrder>();
-  let skippedStatus = 0;
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const cells = splitLine(lines[i] ?? "", delim);
@@ -130,13 +134,7 @@ export function parseOrderCsv(text: string): CsvResult {
     if (!name || !Number.isFinite(qty) || qty === 0) continue;
     if (SKIP_PRODUCTS.test(name)) continue;
 
-    if (statusCol >= 0) {
-      const status = (cells[statusCol] ?? "").trim().toLowerCase();
-      if (!OPEN_STATUSES.includes(status)) {
-        skippedStatus++;
-        continue;
-      }
-    }
+    const status = statusCol >= 0 ? (cells[statusCol] ?? "").trim().toLowerCase() || null : null;
 
     const orderNumber = orderNoCol >= 0 ? (cells[orderNoCol] ?? "").trim() || null : null;
     const customer = customerCol >= 0 ? (cells[customerCol] ?? "").trim() : "";
@@ -149,6 +147,7 @@ export function parseOrderCsv(text: string): CsvResult {
         customer: customer || "Unknown wholesaler",
         reference: refCol >= 0 ? (cells[refCol] ?? "").trim() || null : null,
         deliveryDate: deliveryCol >= 0 ? toIsoDate(cells[deliveryCol] ?? "") : null,
+        status,
         rows: [],
       };
       map.set(key, order);
@@ -160,7 +159,7 @@ export function parseOrderCsv(text: string): CsvResult {
     else order.rows.push({ name, qty: Math.round(Math.abs(qty)), unit });
   }
 
-  return { orders: [...map.values()], skippedStatus, headers };
+  return { orders: [...map.values()], headers };
 }
 
 const norm = (s: string) =>
