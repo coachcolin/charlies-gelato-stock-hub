@@ -159,7 +159,7 @@ export function parseOrderCsv(text: string): CsvResult {
     else order.rows.push({ name, qty: Math.round(Math.abs(qty)), unit });
   }
 
-  return { orders: [...map.values()], skippedStatus, headers };
+  return { orders: [...map.values()], headers };
 }
 
 const norm = (s: string) =>
