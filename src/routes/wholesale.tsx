@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
+import { isDelivered, matchFlavour, parseOrderCsv, type ParsedOrder } from "@/lib/csv";
 
 import {
   applyMovements,
@@ -58,7 +58,8 @@ function WholesalePage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<ParsedOrder[] | null>(null);
-  const [skipped, setSkipped] = useState(0);
+  const [delivered, setDelivered] = useState<ParsedOrder[] | null>(null);
+  const [openOrders, setOpenOrders] = useState<ParsedOrder[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [exportHelpOpen, setExportHelpOpen] = useState(false);
