@@ -140,19 +140,21 @@ function WholesalePage() {
           if (!file) return;
           const parsed = parseOrderCsv(await file.text());
           if (parsed.orders.length === 0) {
-            toast.error(
-              parsed.skippedStatus
-                ? "No orders to import — every line was already delivered."
-                : "Couldn't find any flavour/quantity rows in that file.",
-            );
+            toast.error("Couldn't find any flavour/quantity rows in that file.");
             return;
           }
-          setSkipped(parsed.skippedStatus);
+          const open = parsed.orders.filter((o) => !isDelivered(o));
+          const done = parsed.orders.filter(isDelivered);
           setDueDate(
             parsed.orders.find((o) => o.deliveryDate)?.deliveryDate ??
               new Date().toISOString().slice(0, 10),
           );
-          setPending(parsed.orders);
+          if (done.length > 0) {
+            setOpenOrders(open);
+            setDelivered(done);
+          } else {
+            setPending(open);
+          }
         }}
       />
       <div className="mb-3 flex gap-2">
