@@ -209,7 +209,15 @@ function WholesalePage() {
         onSaved={() => qc.invalidateQueries()}
       />
 
-      <Dialog open={Boolean(delivered)} onOpenChange={(o) => !o && setDelivered(null)}>
+      <Dialog
+        open={Boolean(delivered)}
+        onOpenChange={(o) => {
+          if (o) return;
+          // Closing the dialog counts as excluding the delivered orders.
+          setDelivered(null);
+          if (openOrders.length > 0) setPending(openOrders);
+        }}
+      >
         <DialogContent className="rounded-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">
