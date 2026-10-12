@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,6 +48,12 @@ export const Route = createFileRoute("/wholesale")({
   component: WholesalePage,
 });
 
+const EXPORT_STEPS = [
+  "Open Upstock and go to 'Reports' tab (found on the menu on the left hand side of the screen)",
+  "Select 'Orders Export Report'",
+  "Export the orders you would like using the date filter",
+];
+
 function WholesalePage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,6 +61,7 @@ function WholesalePage() {
   const [skipped, setSkipped] = useState(0);
   const [dueDate, setDueDate] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
+  const [exportHelpOpen, setExportHelpOpen] = useState(false);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
@@ -147,7 +154,7 @@ function WholesalePage() {
           setPending(parsed.orders);
         }}
       />
-      <div className="mb-5 flex gap-2">
+      <div className="mb-3 flex gap-2">
         <Button
           className="h-16 flex-1 rounded-2xl text-lg"
           onClick={() => fileRef.current?.click()}
@@ -162,6 +169,35 @@ function WholesalePage() {
           <Plus className="mr-2 size-5" /> Enter order
         </Button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setExportHelpOpen(true)}
+        className="mb-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-input bg-card px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted"
+      >
+        <BookOpen className="size-4" /> How to export from Upstock
+      </button>
+
+      <Dialog open={exportHelpOpen} onOpenChange={setExportHelpOpen}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">How to export from Upstock</DialogTitle>
+            <DialogDescription>
+              Then bring the file back here and tap Import order (CSV).
+            </DialogDescription>
+          </DialogHeader>
+          <ol className="space-y-3">
+            {EXPORT_STEPS.map((step, i) => (
+              <li key={step} className="flex gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-display text-sm text-primary-foreground">
+                  {i + 1}
+                </span>
+                <span className="pt-1 text-sm leading-relaxed">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </DialogContent>
+      </Dialog>
 
       <ManualOrderDialog
         open={manualOpen}
