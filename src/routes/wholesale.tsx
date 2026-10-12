@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,6 +48,12 @@ export const Route = createFileRoute("/wholesale")({
   component: WholesalePage,
 });
 
+const EXPORT_STEPS = [
+  "Open Upstock and go to 'Reports' tab (found on the menu on the left hand side of the screen)",
+  "Select 'Orders Export Report'",
+  "Export the orders you would like using the date filter",
+];
+
 function WholesalePage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,6 +61,7 @@ function WholesalePage() {
   const [skipped, setSkipped] = useState(0);
   const [dueDate, setDueDate] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
+  const [exportHelpOpen, setExportHelpOpen] = useState(false);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
