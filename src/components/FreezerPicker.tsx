@@ -115,7 +115,7 @@ export function FreezerPicker({
   label: string;
   value: string | null;
   onChange: (id: string) => void;
-  outLines?: OutLine[];
+  outLines?: OutLine[] | undefined;
 }) {
   const { freezers } = useFreezerData();
   const short = useShortfalls(value, outLines);
@@ -135,7 +135,7 @@ export function FreezerPicker({
 export function useFreezerPrompt() {
   const [state, setState] = useState<{
     title: string;
-    outLines?: OutLine[];
+    outLines?: OutLine[] | undefined;
   } | null>(null);
   const [value, setValue] = useState<string | null>(null);
   const resolver = useRef<((id: string | null) => void) | null>(null);
