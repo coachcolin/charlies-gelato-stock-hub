@@ -64,7 +64,8 @@ export type MovementKind =
   | "removal"
   | "wholesale"
   | "production"
-  | "adjustment";
+  | "adjustment"
+  | "transfer";
 
 export type Movement = {
   id: string;
@@ -207,15 +208,18 @@ export async function setDayCapacity(season: Season, trays: number) {
   if (res.error) throw new Error(res.error.message);
 }
 
+export type MovementLine = { flavour_id: string; qty: number; unit?: Unit; freezer_id?: string };
+
 export async function applyMovements(
-  lines: { flavour_id: string; qty: number; unit?: Unit }[],
+  lines: MovementLine[],
   kind: MovementKind,
   note?: string,
   orderId?: string,
   account?: string,
+  freezerId?: string,
 ) {
   const res = await db.rpc("apply_stock_movements", {
-    _movements: lines,
+    _movements: lines.map((l) => ({ ...l, freezer_id: l.freezer_id ?? freezerId ?? null })),
     _kind: kind,
     _note: note ?? null,
     _order_id: orderId ?? null,
@@ -223,6 +227,61 @@ export async function applyMovements(
   });
   if (res.error) throw new Error(res.error.message);
   return res.data as string;
+}
+
+/* ---------- per-freezer stock ---------- */
+
+export type FreezerStock = {
+  flavour_id: string;
+  freezer_id: string;
+  stock_qty: number;
+  tub_qty: number;
+  counted_at: string | null;
+};
+
+export async function fetchFreezerStock(): Promise<FreezerStock[]> {
+  return unwrap(await db.from("freezer_stock").select("*"));
+}
+
+/** Freezer ids that have had their first (starting) stock take. */
+export async function fetchCountedFreezers(): Promise<string[]> {
+  const res = await db
+    .from("app_settings")
+    .select("value")
+    .eq("key", "freezers_counted")
+    .maybeSingle();
+  if (res.error) throw new Error(res.error.message);
+  return ((res.data?.value as string) ?? "").split(",").filter(Boolean);
+}
+
+/** Lookup: `${flavourId}:${freezerId}` → counts. */
+export function freezerStockMap(rows: FreezerStock[]) {
+  return new Map(rows.map((r) => [`${r.flavour_id}:${r.freezer_id}`, r]));
+}
+
+export async function freezerStockTake(
+  freezerId: string,
+  counts: { flavour_id: string; tray: number; tub: number }[],
+) {
+  const res = await db.rpc("freezer_stock_take", { _freezer_id: freezerId, _counts: counts });
+  if (res.error) throw new Error(res.error.message);
+  return res.data as { baseline_complete: boolean; just_completed: boolean };
+}
+
+/** Move stock from one freezer to another (overall totals unchanged). */
+export async function moveStock(
+  fromId: string,
+  toId: string,
+  lines: { flavour_id: string; qty: number; unit: Unit }[],
+) {
+  return applyMovements(
+    lines.flatMap((l) => [
+      { flavour_id: l.flavour_id, qty: -l.qty, unit: l.unit, freezer_id: fromId },
+      { flavour_id: l.flavour_id, qty: l.qty, unit: l.unit, freezer_id: toId },
+    ]),
+    "transfer",
+    "Moved between freezers",
+  );
 }
 
 export async function fetchOrders(): Promise<
