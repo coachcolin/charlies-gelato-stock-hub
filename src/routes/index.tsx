@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  ArrowLeftRight,
   BarChart3,
   ClipboardList,
   Database,
@@ -55,6 +56,13 @@ const TILES = [
     label: "Soft Freezer Order",
     hint: "Top up the display freezers",
     icon: IceCreamCone,
+    tone: "cream" as const,
+  },
+  {
+    to: "/move",
+    label: "Move Stock",
+    hint: "Between freezers",
+    icon: ArrowLeftRight,
     tone: "cream" as const,
   },
   {

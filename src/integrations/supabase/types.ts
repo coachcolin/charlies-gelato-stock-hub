@@ -86,6 +86,48 @@ export type Database = {
         }
         Relationships: []
       }
+      freezer_stock: {
+        Row: {
+          counted_at: string | null
+          flavour_id: string
+          freezer_id: string
+          stock_qty: number
+          tub_qty: number
+          updated_at: string
+        }
+        Insert: {
+          counted_at?: string | null
+          flavour_id: string
+          freezer_id: string
+          stock_qty?: number
+          tub_qty?: number
+          updated_at?: string
+        }
+        Update: {
+          counted_at?: string | null
+          flavour_id?: string
+          freezer_id?: string
+          stock_qty?: number
+          tub_qty?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "freezer_stock_flavour_id_fkey"
+            columns: ["flavour_id"]
+            isOneToOne: false
+            referencedRelation: "flavours"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "freezer_stock_freezer_id_fkey"
+            columns: ["freezer_id"]
+            isOneToOne: false
+            referencedRelation: "freezers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       freezers: {
         Row: {
           capacity_trays: number
@@ -218,6 +260,7 @@ export type Database = {
           created_at: string
           flavour_id: string | null
           flavour_name: string
+          freezer_id: string | null
           id: string
           kind: string
           note: string | null
@@ -231,6 +274,7 @@ export type Database = {
           created_at?: string
           flavour_id?: string | null
           flavour_name: string
+          freezer_id?: string | null
           id?: string
           kind: string
           note?: string | null
@@ -244,6 +288,7 @@ export type Database = {
           created_at?: string
           flavour_id?: string | null
           flavour_name?: string
+          freezer_id?: string | null
           id?: string
           kind?: string
           note?: string | null
@@ -258,6 +303,13 @@ export type Database = {
             columns: ["flavour_id"]
             isOneToOne: false
             referencedRelation: "flavours"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_freezer_id_fkey"
+            columns: ["freezer_id"]
+            isOneToOne: false
+            referencedRelation: "freezers"
             referencedColumns: ["id"]
           },
           {
@@ -375,6 +427,10 @@ export type Database = {
             }
             Returns: string
           }
+      freezer_stock_take: {
+        Args: { _counts: Json; _freezer_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

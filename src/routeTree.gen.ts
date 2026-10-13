@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as DataRouteImport } from './routes/data'
 import { Route as EditStockRouteImport } from './routes/edit-stock'
+import { Route as MoveRouteImport } from './routes/move'
 import { Route as ProductionRouteImport } from './routes/production'
 import { Route as RemoveRouteImport } from './routes/remove'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -38,6 +39,11 @@ const DataRoute = DataRouteImport.update({
 const EditStockRoute = EditStockRouteImport.update({
   id: '/edit-stock',
   path: '/edit-stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MoveRoute = MoveRouteImport.update({
+  id: '/move',
+  path: '/move',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductionRoute = ProductionRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/add': typeof AddRoute
   '/data': typeof DataRoute
   '/edit-stock': typeof EditStockRoute
+  '/move': typeof MoveRoute
   '/production': typeof ProductionRoute
   '/remove': typeof RemoveRoute
   '/reports': typeof ReportsRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/add': typeof AddRoute
   '/data': typeof DataRoute
   '/edit-stock': typeof EditStockRoute
+  '/move': typeof MoveRoute
   '/production': typeof ProductionRoute
   '/remove': typeof RemoveRoute
   '/reports': typeof ReportsRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/add': typeof AddRoute
   '/data': typeof DataRoute
   '/edit-stock': typeof EditStockRoute
+  '/move': typeof MoveRoute
   '/production': typeof ProductionRoute
   '/remove': typeof RemoveRoute
   '/reports': typeof ReportsRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/data'
     | '/edit-stock'
+    | '/move'
     | '/production'
     | '/remove'
     | '/reports'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/data'
     | '/edit-stock'
+    | '/move'
     | '/production'
     | '/remove'
     | '/reports'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/data'
     | '/edit-stock'
+    | '/move'
     | '/production'
     | '/remove'
     | '/reports'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   AddRoute: typeof AddRoute
   DataRoute: typeof DataRoute
   EditStockRoute: typeof EditStockRoute
+  MoveRoute: typeof MoveRoute
   ProductionRoute: typeof ProductionRoute
   RemoveRoute: typeof RemoveRoute
   ReportsRoute: typeof ReportsRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/edit-stock'
       fullPath: '/edit-stock'
       preLoaderRoute: typeof EditStockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/move': {
+      id: '/move'
+      path: '/move'
+      fullPath: '/move'
+      preLoaderRoute: typeof MoveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/production': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   AddRoute: AddRoute,
   DataRoute: DataRoute,
   EditStockRoute: EditStockRoute,
+  MoveRoute: MoveRoute,
   ProductionRoute: ProductionRoute,
   RemoveRoute: RemoveRoute,
   ReportsRoute: ReportsRoute,

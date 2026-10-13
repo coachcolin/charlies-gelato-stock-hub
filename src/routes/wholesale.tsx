@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
+import { useFreezerPrompt } from "@/components/FreezerPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -412,12 +413,20 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
     onSuccess: refresh,
   });
 
+  const prompt = useFreezerPrompt();
   const complete = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (freezerId: string) => {
       const lines = order.items
         .filter((i) => i.flavour_id)
         .map((i) => ({ flavour_id: i.flavour_id as string, qty: -i.qty, unit: i.unit }));
-      await applyMovements(lines, "wholesale", `Wholesale: ${order.wholesaler}`, order.id);
+      await applyMovements(
+        lines,
+        "wholesale",
+        `Wholesale: ${order.wholesaler}`,
+        order.id,
+        undefined,
+        freezerId,
+      );
       const res = await db
         .from("wholesale_orders")
         .update({ status: "completed", completed_at: new Date().toISOString() })
@@ -551,11 +560,25 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
         })}
       </div>
 
+      {prompt.dialog}
       <div className="mt-4 flex gap-2">
         <Button
           className="h-13 flex-1 rounded-2xl"
           disabled={complete.isPending}
-          onClick={() => complete.mutate()}
+          onClick={async () => {
+            const id = await prompt.ask({
+              title: `Which freezer is ${order.wholesaler}'s order coming out of?`,
+              outLines: order.items
+                .filter((i) => i.flavour_id)
+                .map((i) => ({
+                  flavour_id: i.flavour_id as string,
+                  name: i.flavour_name,
+                  qty: i.qty,
+                  unit: i.unit,
+                })),
+            });
+            if (id) complete.mutate(id);
+          }}
         >
           Mark as sent
         </Button>

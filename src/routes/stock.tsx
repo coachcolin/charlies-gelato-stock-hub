@@ -15,7 +15,9 @@ import {
 import {
   categoryLabel,
   desiredFor,
+  fetchCountedFreezers,
   fetchFlavours,
+  fetchFreezerStock,
   fetchFreezers,
   fetchSeason,
   trayEquivalents,
@@ -58,6 +60,8 @@ function StockPage() {
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const freezers = useQuery({ queryKey: ["freezers"], queryFn: fetchFreezers });
   const season = useQuery({ queryKey: ["season"], queryFn: fetchSeason });
+  const fstock = useQuery({ queryKey: ["freezer-stock"], queryFn: fetchFreezerStock });
+  const counted = useQuery({ queryKey: ["freezers-counted"], queryFn: fetchCountedFreezers });
 
   const list = useMemo(() => {
     const all = (flavours.data ?? []).filter((f) => f.active);
@@ -118,6 +122,28 @@ function StockPage() {
               Stock on record exceeds total freezer capacity.
             </p>
           ) : null}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {(freezers.data ?? []).map((fr) => {
+            const rows = (fstock.data ?? []).filter((r) => r.freezer_id === fr.id);
+            const t = rows.reduce((s, r) => s + r.stock_qty, 0);
+            const tb = rows.reduce((s, r) => s + r.tub_qty, 0);
+            const u = Math.round(t + tb / 5);
+            const p = fr.capacity_trays ? Math.min(100, Math.round((u / fr.capacity_trays) * 100)) : 0;
+            return (
+              <div key={fr.id} className="surface p-3">
+                <p className="font-display text-sm">{fr.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(counted.data ?? []).includes(fr.id)
+                    ? `${t} trays · ${tb} tubs · ${u}/${fr.capacity_trays} (${p}%)`
+                    : "Needs a starting stock take"}
+                </p>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                  <div className={`h-full rounded-full ${p > 90 ? "bg-primary" : "bg-sky"}`} style={{ width: `${p}%` }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
