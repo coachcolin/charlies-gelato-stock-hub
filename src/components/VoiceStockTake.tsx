@@ -1,13 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Mic, Square, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { History, Loader2, Mic, Square, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Flavour, Unit } from "@/lib/gelato";
 import { transcribeStockTake } from "@/lib/voice.functions";
+import { clearRecording, loadRecording, saveRecording } from "@/lib/voice-store";
 
 type VoiceRow = { id: string; name: string; qty: number; flavourId: string | null; unit: Unit };
 
@@ -53,8 +54,10 @@ export function useVoiceStockTake(
     hint?: string;
     applyLabel?: string;
     appliedMessage?: (n: number) => string;
+    persistKey?: string;
   },
 ) {
+  const persistKey = options?.persistKey ?? "default";
   const recordLabel = options?.recordLabel ?? "Record stock take";
   const hint =
     options?.hint ??
@@ -70,6 +73,19 @@ export function useVoiceStockTake(
   const [elapsed, setElapsed] = useState(0);
   const [audioData, setAudioData] = useState<number[] | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ blob: Blob; url: string; savedAt: number } | null>(null);
+
+  // Restore an unfinished recording (e.g. the phone screen turned off mid-take).
+  useEffect(() => {
+    let cancelled = false;
+    loadRecording(persistKey).then((rec) => {
+      if (cancelled || !rec) return;
+      setSaved({ blob: rec.blob, url: URL.createObjectURL(rec.blob), savedAt: rec.savedAt });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [persistKey]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -79,7 +95,13 @@ export function useVoiceStockTake(
   const rafRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const transcribe = useServerFn(transcribeStockTake);
+
+  const releaseWakeLock = () => {
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
+  };
 
   const send = useMutation({
     mutationFn: async (blob: Blob) => {
@@ -140,24 +162,42 @@ export function useVoiceStockTake(
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec = new MediaRecorder(stream);
       const chunks: Blob[] = [];
+      const mime = rec.mimeType || "audio/webm";
       rec.ondataavailable = (e) => {
-        if (e.data.size) chunks.push(e.data);
+        if (e.data.size) {
+          chunks.push(e.data);
+          // Save progress so a screen-off or reload doesn't lose what's been said.
+          void saveRecording(persistKey, new Blob(chunks, { type: mime }));
+        }
       };
       rec.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
+        releaseWakeLock();
         cleanupAudio();
-        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        const blob = new Blob(chunks, { type: mime });
+        void saveRecording(persistKey, blob);
         setPlaybackUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return URL.createObjectURL(blob);
         });
+        setSaved(null);
         send.mutate(blob);
       };
 
       recorderRef.current = rec;
-      rec.start();
+      rec.start(2000);
       setRecording(true);
+
+      // Best effort: keep the screen on while recording (supported on modern phones).
+      try {
+        const nav = navigator as Navigator & {
+          wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+        };
+        wakeLockRef.current = (await nav.wakeLock?.request("screen")) ?? null;
+      } catch {
+        // Wake lock unavailable — the saved-recording fallback still protects the take.
+      }
 
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass();
@@ -262,6 +302,43 @@ export function useVoiceStockTake(
         <p className="mt-2 px-1 text-xs text-muted-foreground">{hint}</p>
       )}
 
+      {saved && !recording && !rows ? (
+        <div className="mt-3 space-y-2 rounded-2xl border border-primary/30 bg-primary/5 p-3">
+          <p className="flex items-center gap-2 font-display text-sm">
+            <History className="size-4 text-primary" />
+            Unfinished recording from{" "}
+            {new Date(saved.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          </p>
+          <audio src={saved.url} controls className="w-full" preload="metadata" />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              className="h-11 flex-1 rounded-xl"
+              disabled={send.isPending}
+              onClick={() => {
+                const blob = saved.blob;
+                setSaved(null);
+                send.mutate(blob);
+              }}
+            >
+              Use this recording
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl"
+              onClick={() => {
+                URL.revokeObjectURL(saved.url);
+                setSaved(null);
+                void clearRecording(persistKey);
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {playbackUrl && !recording ? (
         <div className="mt-3 rounded-2xl bg-muted/60 p-3">
           <p className="mb-2 font-display text-sm">Your recording</p>
@@ -347,6 +424,7 @@ export function useVoiceStockTake(
                 onApply(counts);
                 setRows(null);
                 setTranscript("");
+                void clearRecording(persistKey);
                 toast.success(appliedMessage(n));
               }}
             >
@@ -359,6 +437,7 @@ export function useVoiceStockTake(
               onClick={() => {
                 setRows(null);
                 setTranscript("");
+                void clearRecording(persistKey);
               }}
             >
               Discard

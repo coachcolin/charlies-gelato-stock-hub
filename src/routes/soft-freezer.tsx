@@ -78,6 +78,7 @@ function SoftFreezerOrder() {
       }),
     {
       recordLabel: "Record soft freezer order",
+      persistKey: "soft-freezer",
       hint: "Speak what you’re taking, e.g. “one strawberry, two chocolate, three cookie dough tubs”. Say “tubs” for tubs, otherwise it counts trays. You can check and edit the list before it fills in the order.",
       applyLabel: "Add to order",
       appliedMessage: (n) => `Added ${n} flavour${n === 1 ? "" : "s"} to the order`,
