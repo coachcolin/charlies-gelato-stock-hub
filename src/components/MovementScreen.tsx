@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { FlavourList } from "@/components/FlavourList";
-import { FreezerPicker } from "@/components/FreezerPicker";
 import { QtyDialog } from "@/components/QtyDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +42,6 @@ export function MovementScreen({
   const [lines, setLines] = useState<Line[]>([]);
   const [account, setAccount] = useState("Charlie's Shop");
   const [otherAccount, setOtherAccount] = useState("");
-  const [freezerId, setFreezerId] = useState<string | null>(null);
 
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(60) });
@@ -71,7 +69,6 @@ export function MovementScreen({
         undefined,
         undefined,
         kind === "removal" && resolvedAccount ? resolvedAccount : undefined,
-        freezerId ?? undefined,
       ),
     onSuccess: () => {
       qc.invalidateQueries();
@@ -172,16 +169,10 @@ export function MovementScreen({
                 ) : null}
               </div>
             ) : null}
-            <FreezerPicker
-              label={sign > 0 ? "Which freezer is it going into?" : "Which freezer is it coming out of?"}
-              value={freezerId}
-              onChange={setFreezerId}
-              outLines={sign < 0 ? lines.map((l) => ({ flavour_id: l.id, name: l.name, qty: l.qty, unit: l.unit })) : undefined}
-            />
             <Button
               className="h-16 w-full rounded-2xl text-lg"
               disabled={
-                submit.isPending || !freezerId || (kind === "removal" && !resolvedAccount)
+                submit.isPending || (kind === "removal" && !resolvedAccount)
               }
               onClick={() => submit.mutate()}
             >
