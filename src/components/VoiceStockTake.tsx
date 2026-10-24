@@ -95,7 +95,13 @@ export function useVoiceStockTake(
   const rafRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const transcribe = useServerFn(transcribeStockTake);
+
+  const releaseWakeLock = () => {
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
+  };
 
   const send = useMutation({
     mutationFn: async (blob: Blob) => {
@@ -156,24 +162,42 @@ export function useVoiceStockTake(
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec = new MediaRecorder(stream);
       const chunks: Blob[] = [];
+      const mime = rec.mimeType || "audio/webm";
       rec.ondataavailable = (e) => {
-        if (e.data.size) chunks.push(e.data);
+        if (e.data.size) {
+          chunks.push(e.data);
+          // Save progress so a screen-off or reload doesn't lose what's been said.
+          void saveRecording(persistKey, new Blob(chunks, { type: mime }));
+        }
       };
       rec.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
+        releaseWakeLock();
         cleanupAudio();
-        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        const blob = new Blob(chunks, { type: mime });
+        void saveRecording(persistKey, blob);
         setPlaybackUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return URL.createObjectURL(blob);
         });
+        setSaved(null);
         send.mutate(blob);
       };
 
       recorderRef.current = rec;
-      rec.start();
+      rec.start(2000);
       setRecording(true);
+
+      // Best effort: keep the screen on while recording (supported on modern phones).
+      try {
+        const nav = navigator as Navigator & {
+          wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+        };
+        wakeLockRef.current = (await nav.wakeLock?.request("screen")) ?? null;
+      } catch {
+        // Wake lock unavailable — the saved-recording fallback still protects the take.
+      }
 
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass();
