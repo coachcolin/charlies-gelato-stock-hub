@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
-import { useFreezerPrompt } from "@/components/FreezerPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -683,7 +682,6 @@ function ActiveReport({
 
 
 
-  const prompt = useFreezerPrompt();
   const tick = useMutation({
     mutationFn: async ({
       itemId,
@@ -691,14 +689,12 @@ function ActiveReport({
       name,
       qty,
       tubs,
-      freezerId,
     }: {
       itemId: string;
       flavourId: string | null;
       name: string;
       qty: number;
       tubs: number;
-      freezerId: string;
     }) => {
       if (flavourId) {
         await applyMovements(
@@ -708,9 +704,6 @@ function ActiveReport({
           ],
           "production",
           `Made ${name}`,
-          undefined,
-          undefined,
-          freezerId,
         );
       }
       const res = await db
@@ -762,7 +755,6 @@ function ActiveReport({
         multiDay ? ` · ${dayNumbers.length}-day week` : ""
       }`}
     >
-      {prompt.dialog}
       <div className="space-y-4">
         {multiDay ? (
           <DayTabs
@@ -823,20 +815,15 @@ function ActiveReport({
                       size="icon"
                       className="size-12 shrink-0 rounded-full"
                       aria-label={`Mark ${i.flavour_name} as made`}
-                      onClick={async () => {
-                        const freezerId = await prompt.ask({
-                          title: `Which freezer is the ${i.flavour_name} going into?`,
-                        });
-                        if (!freezerId) return;
+                      onClick={() =>
                         tick.mutate({
                           itemId: i.id,
                           flavourId: i.flavour_id,
                           name: i.flavour_name,
                           qty: value,
                           tubs: tubValue,
-                          freezerId,
-                        });
-                      }}
+                        })
+                      }
                     >
                       <Check className="size-5" />
                     </Button>

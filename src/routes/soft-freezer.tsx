@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
-import { FreezerPicker } from "@/components/FreezerPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVoiceStockTake } from "@/components/VoiceStockTake";
@@ -136,10 +135,9 @@ function SoftFreezerOrder() {
       return next;
     });
 
-  const [freezerId, setFreezerId] = useState<string | null>(null);
   const submit = useMutation({
     mutationFn: () =>
-      applyMovements(lines, "removal", "Soft freezer order", undefined, undefined, freezerId ?? undefined),
+      applyMovements(lines, "removal", "Soft freezer order"),
     onSuccess: () => {
       qc.invalidateQueries();
       toast.success(`${totalLabel} sent to the display freezer`);
@@ -211,17 +209,6 @@ function SoftFreezerOrder() {
             <span className="text-muted-foreground">Total</span>
             <span className="text-lg">{totalLabel}</span>
           </div>
-          <FreezerPicker
-            label="Which freezer is it coming out of?"
-            value={freezerId}
-            onChange={setFreezerId}
-            outLines={selected.map(({ flavour, qty, unit }) => ({
-              flavour_id: flavour.id,
-              name: flavour.name,
-              qty,
-              unit,
-            }))}
-          />
         </div>
 
 
@@ -238,7 +225,7 @@ function SoftFreezerOrder() {
             </Button>
             <Button
               className="h-16 flex-1 rounded-2xl text-lg"
-              disabled={submit.isPending || total === 0 || !freezerId}
+              disabled={submit.isPending || total === 0}
               onClick={() => submit.mutate()}
             >
               <Check className="mr-2 size-6" />
