@@ -69,10 +69,14 @@ function EditStock() {
   const countedIds = counted.data ?? [];
   const isStarting = Boolean(freezerId) && !countedIds.includes(freezerId as string);
 
-  const voice = useVoiceStockTake(flavours.data ?? [], (counts) => {
-    setDraft((d) => ({ ...d, ...counts.tray }));
-    setTubDraft((d) => ({ ...d, ...counts.tub }));
-  });
+  const voice = useVoiceStockTake(
+    flavours.data ?? [],
+    (counts) => {
+      setDraft((d) => ({ ...d, ...counts.tray }));
+      setTubDraft((d) => ({ ...d, ...counts.tub }));
+    },
+    { persistKey: `stock-take-${freezerId ?? "none"}` },
+  );
 
   // flavours to show: active ones, plus inactive ones this freezer still has on record
   const relevant = useMemo(
