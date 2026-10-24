@@ -1,13 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Mic, Square, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { History, Loader2, Mic, Square, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Flavour, Unit } from "@/lib/gelato";
 import { transcribeStockTake } from "@/lib/voice.functions";
+import { clearRecording, loadRecording, saveRecording } from "@/lib/voice-store";
 
 type VoiceRow = { id: string; name: string; qty: number; flavourId: string | null; unit: Unit };
 
@@ -53,8 +54,10 @@ export function useVoiceStockTake(
     hint?: string;
     applyLabel?: string;
     appliedMessage?: (n: number) => string;
+    persistKey?: string;
   },
 ) {
+  const persistKey = options?.persistKey ?? "default";
   const recordLabel = options?.recordLabel ?? "Record stock take";
   const hint =
     options?.hint ??
@@ -70,6 +73,19 @@ export function useVoiceStockTake(
   const [elapsed, setElapsed] = useState(0);
   const [audioData, setAudioData] = useState<number[] | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ blob: Blob; url: string; savedAt: number } | null>(null);
+
+  // Restore an unfinished recording (e.g. the phone screen turned off mid-take).
+  useEffect(() => {
+    let cancelled = false;
+    loadRecording(persistKey).then((rec) => {
+      if (cancelled || !rec) return;
+      setSaved({ blob: rec.blob, url: URL.createObjectURL(rec.blob), savedAt: rec.savedAt });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [persistKey]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
