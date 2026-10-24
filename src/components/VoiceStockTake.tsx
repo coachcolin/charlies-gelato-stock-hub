@@ -302,6 +302,43 @@ export function useVoiceStockTake(
         <p className="mt-2 px-1 text-xs text-muted-foreground">{hint}</p>
       )}
 
+      {saved && !recording && !rows ? (
+        <div className="mt-3 space-y-2 rounded-2xl border border-primary/30 bg-primary/5 p-3">
+          <p className="flex items-center gap-2 font-display text-sm">
+            <History className="size-4 text-primary" />
+            Unfinished recording from{" "}
+            {new Date(saved.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          </p>
+          <audio src={saved.url} controls className="w-full" preload="metadata" />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              className="h-11 flex-1 rounded-xl"
+              disabled={send.isPending}
+              onClick={() => {
+                const blob = saved.blob;
+                setSaved(null);
+                send.mutate(blob);
+              }}
+            >
+              Use this recording
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl"
+              onClick={() => {
+                URL.revokeObjectURL(saved.url);
+                setSaved(null);
+                void clearRecording(persistKey);
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {playbackUrl && !recording ? (
         <div className="mt-3 rounded-2xl bg-muted/60 p-3">
           <p className="mb-2 font-display text-sm">Your recording</p>
@@ -387,6 +424,7 @@ export function useVoiceStockTake(
                 onApply(counts);
                 setRows(null);
                 setTranscript("");
+                void clearRecording(persistKey);
                 toast.success(appliedMessage(n));
               }}
             >
@@ -399,6 +437,7 @@ export function useVoiceStockTake(
               onClick={() => {
                 setRows(null);
                 setTranscript("");
+                void clearRecording(persistKey);
               }}
             >
               Discard
