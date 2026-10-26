@@ -12,6 +12,7 @@ function base64ToBytes(b64: string) {
 export const transcribeStockTake = createServerFn({ method: "POST" })
   .inputValidator((input: { audio: string; mime: string; flavours: string[] }) => {
     if (!input?.audio) throw new Error("No audio provided");
+    if (input.audio.length > 32_000_000) throw new Error("This recording is too large. Please record a shorter take.");
     return input;
   })
   .handler(async ({ data }) => {
@@ -19,7 +20,7 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
     if (!key) throw new Error("Voice transcription is not configured");
 
     const bytes = base64ToBytes(data.audio);
-    const ext = data.mime.includes("mp4") || data.mime.includes("m4a") ? "m4a" : "webm";
+    const ext = data.mime.includes("wav") ? "wav" : data.mime.includes("mp4") || data.mime.includes("m4a") ? "m4a" : "webm";
     const form = new FormData();
     form.append("file", new Blob([bytes], { type: data.mime }), `stocktake.${ext}`);
     form.append("model", "openai/gpt-4o-mini-transcribe");
@@ -34,9 +35,7 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
       body: form,
     });
     if (!res.ok) {
-      if (res.status === 429) throw new Error("Too many requests — try again in a moment.");
-      if (res.status === 402) throw new Error("AI credits exhausted.");
-      throw new Error("Could not transcribe the recording");
+      await throwVoiceError(res, "transcription");
     }
     const json = (await res.json()) as { text?: string };
     const text = (json.text ?? "").trim();
@@ -91,7 +90,7 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
         tool_choice: { type: "function", function: { name: "record_counts" } },
       }),
     });
-    if (!chat.ok) return { text, items: [] as VoiceCount[] };
+    if (!chat.ok) await throwVoiceError(chat, "flavour matching");
     const cj = (await chat.json()) as {
       choices?: { message?: { tool_calls?: { function?: { arguments?: string } }[] } }[];
     };
@@ -105,3 +104,15 @@ export const transcribeStockTake = createServerFn({ method: "POST" })
     }
     return { text, items };
   });
+
+async function throwVoiceError(response: Response, stage: string): Promise<never> {
+  const body = await response.json().catch(() => null) as { error?: { message?: string }; message?: string } | null;
+  const detail = body?.error?.message ?? body?.message;
+  console.error(`Voice ${stage} failed (HTTP ${response.status})`);
+  if (response.status === 400 && stage === "transcription") {
+    throw new Error("The audio couldn't be read. Your recording is saved below; please try a new recording.");
+  }
+  if (response.status === 429) throw new Error("Too many requests — your recording is saved. Try again in a moment.");
+  if (response.status === 401) throw new Error("Voice transcription is not configured correctly. Your recording is saved.");
+  throw new Error(detail ?? `Could not complete ${stage}. Your recording is saved; please try again later.`);
+}

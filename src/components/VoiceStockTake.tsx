@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import type { Flavour, Unit } from "@/lib/gelato";
 import { transcribeStockTake } from "@/lib/voice.functions";
 import { clearRecording, loadRecording, saveRecording } from "@/lib/voice-store";
+import { prepareVoiceAudio, startWavRecording, type WavRecorder } from "@/lib/voice-audio";
 
 type VoiceRow = { id: string; name: string; qty: number; flavourId: string | null; unit: Unit };
 
@@ -31,9 +32,9 @@ function matchFlavour(name: string, flavours: Flavour[]) {
   const partial = flavours.filter(
     (f) => normalise(f.name).includes(n) || n.includes(normalise(f.name)),
   );
-  if (partial.length === 1) return partial[0]!;
+  if (partial.length === 1) return partial[0] ?? null;
   if (partial.length > 1) {
-    return [...partial].sort((a, b) => a.name.length - b.name.length)[0]!;
+    return [...partial].sort((a, b) => a.name.length - b.name.length)[0] ?? null;
   }
   return null;
 }
@@ -68,6 +69,8 @@ export function useVoiceStockTake(
 
   const active = useMemo(() => flavours.filter((f) => f.active), [flavours]);
   const [recording, setRecording] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [recordError, setRecordError] = useState<string | null>(null);
   const [rows, setRows] = useState<VoiceRow[] | null>(null);
   const [transcript, setTranscript] = useState("");
   const [elapsed, setElapsed] = useState(0);
@@ -78,6 +81,11 @@ export function useVoiceStockTake(
   // Restore an unfinished recording (e.g. the phone screen turned off mid-take).
   useEffect(() => {
     let cancelled = false;
+    setSaved(null);
+    setRows(null);
+    setTranscript("");
+    setRecordError(null);
+    setPlaybackUrl(null);
     loadRecording(persistKey).then((rec) => {
       if (cancelled || !rec) return;
       setSaved({ blob: rec.blob, url: URL.createObjectURL(rec.blob), savedAt: rec.savedAt });
@@ -87,12 +95,7 @@ export function useVoiceStockTake(
     };
   }, [persistKey]);
 
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const recorderRef = useRef<WavRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
@@ -105,16 +108,21 @@ export function useVoiceStockTake(
 
   const send = useMutation({
     mutationFn: async (blob: Blob) => {
-      const buf = new Uint8Array(await blob.arrayBuffer());
-      let bin = "";
-      for (let i = 0; i < buf.length; i += 1) bin += String.fromCharCode(buf[i]!);
-      return transcribe({
-        data: {
-          audio: btoa(bin),
-          mime: blob.type || "audio/webm",
-          flavours: active.map((f) => f.name),
-        },
-      });
+      setRecordError(null);
+      const segments = await prepareVoiceAudio(blob);
+      const text: string[] = [];
+      const items: Awaited<ReturnType<typeof transcribe>>["items"] = [];
+      for (const segment of segments) {
+        const buf = new Uint8Array(await segment.arrayBuffer());
+        let bin = "";
+        for (const byte of buf) bin += String.fromCharCode(byte);
+        const result = await transcribe({ data: {
+          audio: btoa(bin), mime: "audio/wav", flavours: active.map((f) => f.name),
+        } });
+        text.push(result.text);
+        items.push(...result.items);
+      }
+      return { text: text.join(" "), items };
     },
     onSuccess: (res) => {
       setTranscript(res.text);
@@ -135,105 +143,91 @@ export function useVoiceStockTake(
         }),
       );
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setRecordError(e.message);
+      toast.error(e.message);
+    },
   });
 
   const cleanupAudio = () => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    sourceRef.current?.disconnect();
-    sourceRef.current = null;
-    audioContextRef.current?.close().catch(() => {});
-    audioContextRef.current = null;
-    analyserRef.current = null;
-    dataArrayRef.current = null;
     setAudioData(null);
     setElapsed(0);
   };
 
+  useEffect(() => () => {
+    recorderRef.current?.dispose();
+    recorderRef.current = null;
+    if (timerRef.current) clearInterval(timerRef.current);
+    releaseWakeLock();
+  }, [persistKey]);
+
+  function finish(interrupted = false) {
+    const rec = recorderRef.current;
+    if (!rec) return;
+    recorderRef.current = null;
+    const blob = rec.stop();
+    setRecording(false);
+    releaseWakeLock();
+    cleanupAudio();
+    if (blob.size < 2048) {
+      setRecordError("The recording was too short. Please record your counts again.");
+      return;
+    }
+    void saveRecording(persistKey, blob);
+    setSaved((previous) => {
+      if (previous) URL.revokeObjectURL(previous.url);
+      return { blob, url: URL.createObjectURL(blob), savedAt: Date.now() };
+    });
+    setPlaybackUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return URL.createObjectURL(blob);
+    });
+    if (!interrupted) send.mutate(blob);
+  }
+
   async function start() {
+    if (starting || recorderRef.current) return;
+    setStarting(true);
+    setRecordError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-      const mime = rec.mimeType || "audio/webm";
-      rec.ondataavailable = (e) => {
-        if (e.data.size) {
-          chunks.push(e.data);
-          // Save progress so a screen-off or reload doesn't lose what's been said.
-          void saveRecording(persistKey, new Blob(chunks, { type: mime }));
-        }
-      };
-      rec.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setRecording(false);
-        releaseWakeLock();
-        cleanupAudio();
-        const blob = new Blob(chunks, { type: mime });
-        void saveRecording(persistKey, blob);
-        setPlaybackUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return URL.createObjectURL(blob);
-        });
-        setSaved(null);
-        send.mutate(blob);
-      };
-
-      recorderRef.current = rec;
-      rec.start(2000);
+      recorderRef.current = await startWavRecording({
+        onCheckpoint: (blob) => { void saveRecording(persistKey, blob); },
+        onLevels: setAudioData,
+        onInterrupted: () => finish(true),
+      });
+      setRows(null);
+      setTranscript("");
       setRecording(true);
-
-      // Best effort: keep the screen on while recording (supported on modern phones).
-      try {
-        const nav = navigator as Navigator & {
-          wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
-        };
-        wakeLockRef.current = (await nav.wakeLock?.request("screen")) ?? null;
-      } catch {
-        // Wake lock unavailable — the saved-recording fallback still protects the take.
-      }
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioContextClass();
-      await audioCtx.resume();
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      analyser.smoothingTimeConstant = 0.75;
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength) as Uint8Array<ArrayBuffer>;
-      const source = audioCtx.createMediaStreamSource(stream);
-      source.connect(analyser);
-      audioContextRef.current = audioCtx;
-      analyserRef.current = analyser;
-      dataArrayRef.current = dataArray;
-      sourceRef.current = source;
-
-      const tick = () => {
-        if (!analyserRef.current || !dataArrayRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-        setAudioData(Array.from(dataArrayRef.current));
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-
       startTimeRef.current = performance.now();
       timerRef.current = window.setInterval(() => {
         setElapsed(performance.now() - startTimeRef.current);
       }, 80);
-    } catch {
-      toast.error("Microphone access was blocked");
+      // Wake lock is optional and never blocks starting the microphone.
+      const nav = navigator as Navigator & {
+        wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+      };
+      void nav.wakeLock?.request("screen").then((lock) => {
+        if (recorderRef.current) wakeLockRef.current = lock;
+        else void lock.release().catch(() => {});
+      }).catch(() => {});
+    } catch (error) {
+      const name = error instanceof Error ? error.name : "";
+      const message = name === "NotAllowedError"
+        ? "Microphone access was blocked. Allow microphone access in your browser and try again."
+        : name === "NotFoundError" ? "No microphone was found on this device."
+        : error instanceof Error ? error.message : "Could not start recording. Please try again.";
+      setRecordError(message);
+      toast.error(message);
+    } finally {
+      setStarting(false);
     }
   }
 
-  function stop() {
-    recorderRef.current?.stop();
-  }
+  function stop() { finish(); }
 
   const displayData = audioData ?? Array(16).fill(0);
 
@@ -248,10 +242,10 @@ export function useVoiceStockTake(
         size="lg"
         variant={recording ? "destructive" : "default"}
         className="h-14 w-full rounded-2xl text-base"
-        disabled={send.isPending}
+        disabled={send.isPending || starting}
         onClick={() => (recording ? stop() : start())}
       >
-        {send.isPending ? (
+        {starting ? <><Loader2 className="size-5 animate-spin" /> Starting microphone…</> : send.isPending ? (
           <>
             <Loader2 className="size-5 animate-spin" /> Working out what you said…
           </>
@@ -302,6 +296,8 @@ export function useVoiceStockTake(
         <p className="mt-2 px-1 text-xs text-muted-foreground">{hint}</p>
       )}
 
+      {recordError ? <p role="alert" className="mt-3 text-sm text-destructive">{recordError}</p> : null}
+
       {saved && !recording && !rows ? (
         <div className="mt-3 space-y-2 rounded-2xl border border-primary/30 bg-primary/5 p-3">
           <p className="flex items-center gap-2 font-display text-sm">
@@ -317,7 +313,6 @@ export function useVoiceStockTake(
               disabled={send.isPending}
               onClick={() => {
                 const blob = saved.blob;
-                setSaved(null);
                 send.mutate(blob);
               }}
             >
@@ -339,7 +334,7 @@ export function useVoiceStockTake(
         </div>
       ) : null}
 
-      {playbackUrl && !recording ? (
+      {playbackUrl && !recording && !saved ? (
         <div className="mt-3 rounded-2xl bg-muted/60 p-3">
           <p className="mb-2 font-display text-sm">Your recording</p>
           <audio src={playbackUrl} controls className="w-full" preload="metadata" />
@@ -414,7 +409,7 @@ export function useVoiceStockTake(
               onClick={() => {
                 const counts: VoiceCounts = { tray: {}, tub: {} };
                 rows.forEach((r) => {
-                  if (r.flavourId) counts[r.unit][r.flavourId] = r.qty;
+                  if (r.flavourId) counts[r.unit][r.flavourId] = (counts[r.unit][r.flavourId] ?? 0) + r.qty;
                 });
                 const n = Object.keys(counts.tray).length + Object.keys(counts.tub).length;
                 if (!n) {
@@ -422,6 +417,8 @@ export function useVoiceStockTake(
                   return;
                 }
                 onApply(counts);
+                setSaved(null);
+                setSaved(null);
                 setRows(null);
                 setTranscript("");
                 void clearRecording(persistKey);
@@ -435,6 +432,7 @@ export function useVoiceStockTake(
               variant="outline"
               className="h-12 rounded-2xl"
               onClick={() => {
+                setSaved(null);
                 setRows(null);
                 setTranscript("");
                 void clearRecording(persistKey);
