@@ -334,7 +334,7 @@ export function useVoiceStockTake(
         </div>
       ) : null}
 
-      {playbackUrl && !recording && !saved ? (
+      {playbackUrl && !recording && (!saved || rows) ? (
         <div className="mt-3 rounded-2xl bg-muted/60 p-3">
           <p className="mb-2 font-display text-sm">Your recording</p>
           <audio src={playbackUrl} controls className="w-full" preload="metadata" />
