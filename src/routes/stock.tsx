@@ -27,6 +27,8 @@ import {
 export const Route = createFileRoute("/stock")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Current Stock Levels — Charlie's Gelato" },
       {
         name: "description",

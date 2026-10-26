@@ -19,6 +19,8 @@ import { fetchFlavours, fetchFreezers, fetchOrders } from "@/lib/gelato";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Charlie's Gelato — Freezer Stock Manager" },
       {
         name: "description",

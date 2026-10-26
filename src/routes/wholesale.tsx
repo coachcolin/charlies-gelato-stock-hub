@@ -32,6 +32,8 @@ import {
 export const Route = createFileRoute("/wholesale")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Wholesale Orders — Charlie's Gelato" },
       {
         name: "description",

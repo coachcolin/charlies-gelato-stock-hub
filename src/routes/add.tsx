@@ -5,6 +5,8 @@ import { MovementScreen } from "@/components/MovementScreen";
 export const Route = createFileRoute("/add")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Add Stock — Charlie's Gelato" },
       {
         name: "description",
