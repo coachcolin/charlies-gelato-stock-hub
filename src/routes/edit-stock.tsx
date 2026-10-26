@@ -21,6 +21,8 @@ import {
 export const Route = createFileRoute("/edit-stock")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Edit Stock Levels — Charlie's Gelato" },
       {
         name: "description",

@@ -25,6 +25,8 @@ const parseKey = (key: string) => {
 export const Route = createFileRoute("/soft-freezer")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "Soft Freezer Order — Charlie's Gelato" },
       {
         name: "description",
