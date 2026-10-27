@@ -538,7 +538,7 @@ function ProductionPage() {
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
           <div className="mx-auto max-w-4xl p-4">
             <Button className="h-16 w-full rounded-2xl text-lg" onClick={makePlan}>
-              Plan the days · {formatTraysTubs(totalTrays, totalTubs)}
+              Review the days · {formatTraysTubs(totalTrays, totalTubs)}
             </Button>
           </div>
         </div>
