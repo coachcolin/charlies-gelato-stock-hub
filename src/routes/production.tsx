@@ -238,16 +238,37 @@ function ProductionPage() {
   const row = (f: Flavour) => {
     const min = desiredFor(f, currentSeason);
     const g = gap(f);
+    const pick = picks[f.id];
     return (
-      <div key={f.id} className="flex items-center gap-2 px-3 py-1.5">
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-sm">{f.name}</span>
-          <span className={`block text-[11px] leading-tight ${g > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-            {f.stock_qty} / {min} min{g > 0 ? ` · ${g} short` : ""} · {f.tub_qty ?? 0} tubs
+      <div key={f.id} className="px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-display text-sm">{f.name}</span>
+            <span className={`block text-[11px] leading-tight ${g > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+              {f.stock_qty} / {min} min{g > 0 ? ` · ${g} short` : ""} · {f.tub_qty ?? 0} tubs
+            </span>
           </span>
-        </span>
-        {counter(f, "tray")}
-        {counter(f, "tub")}
+          {counter(f, "tray")}
+          {counter(f, "tub")}
+        </div>
+        {pick ? (
+          <div className="mt-1 flex items-center gap-1">
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Day</span>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-label={`Make ${f.name} on day ${n}`}
+                onClick={() => setDay(f.id, n)}
+                className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold transition active:scale-90 ${
+                  pick.day === n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -261,34 +282,36 @@ function ProductionPage() {
   );
 
   // ---- day plan step ----
-  if (plan) {
-    const dayList = Array.from({ length: dayCount }, (_, i) => i + 1);
-    const day = Math.min(selectedDay, dayCount);
-    const dayItems = chosen.filter((c) => (plan[c.flavour.id] ?? 1) === day);
+  if (reviewing) {
+    const maxUsed = chosen.reduce((m, c) => Math.max(m, c.day), 1);
+    const weekDays = Math.min(7, Math.max(dayCount, maxUsed));
+    const dayList = Array.from({ length: weekDays }, (_, i) => i + 1);
+    const day = Math.min(selectedDay, weekDays);
+    const dayItems = chosen.filter((c) => c.day === day);
     const totals = Object.fromEntries(
       dayList.map((d) => {
-        const items = chosen.filter((c) => (plan[c.flavour.id] ?? 1) === d);
+        const items = chosen.filter((c) => c.day === d);
         return [d, formatTraysTubs(items.reduce((t, c) => t + c.trays, 0), items.reduce((t, c) => t + c.tubs, 0))];
       }),
     );
     const loadOf = (d: number) =>
       chosen
-        .filter((c) => (plan[c.flavour.id] ?? 1) === d)
+        .filter((c) => c.day === d)
         .reduce((t, c) => t + c.trays + c.tubs / TUBS_PER_TRAY, 0);
     const overDays = dayList.filter((d) => loadOf(d) > MAX_DAY_TRAYS);
     // Rule checks after manual moves.
     const daysOf = (g: string) =>
-      new Set(chosen.filter((c) => allergenGroup(c.flavour) === g).map((c) => plan[c.flavour.id] ?? 1));
+      new Set(chosen.filter((c) => allergenGroup(c.flavour) === g).map((c) => c.day));
     const sorbD = daysOf("sorbetto");
     const glutD = daysOf("gluten");
     const nutD = daysOf("nuts");
     const clash = [...glutD].some((d) => nutD.has(d) || sorbD.has(d)) || [...nutD].some((d) => sorbD.has(d));
 
     return (
-      <AppShell title="Day plan" subtitle={`${dayCount}-day week · ${formatTraysTubs(totalTrays, totalTubs)}`}>
+      <AppShell title="Day plan" subtitle={`${weekDays}-day week · ${formatTraysTubs(totalTrays, totalTubs)}`}>
         <div className="space-y-4 pb-28">
           <p className="px-1 text-sm text-muted-foreground">
-            Suggested days: sorbetti together, gluten at the end of a different day, and nuts at the end of another day. You can move anything.
+            Sorbetti, gluten and nuts each need their own day — move anything that clashes.
           </p>
           {dayList.length > 1 ? <DayTabs days={dayList} selected={day} onSelect={setSelectedDay} trayTotals={totals} /> : null}
           {overDays.length > 0 || clash || separateNeeded > dayCount ? (
@@ -327,7 +350,7 @@ function ProductionPage() {
                       <button
                         key={n}
                         type="button"
-                        onClick={() => setPlan((p) => ({ ...(p ?? {}), [c.flavour.id]: n }))}
+                        onClick={() => setDay(c.flavour.id, n)}
                         className={`size-8 rounded-full text-sm font-semibold ${
                           day === n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                         }`}
@@ -351,7 +374,7 @@ function ProductionPage() {
         </div>
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur">
           <div className="mx-auto flex max-w-4xl gap-2">
-            <Button variant="outline" className="h-16 rounded-2xl px-6 text-lg" onClick={() => setPlan(null)}>
+            <Button variant="outline" className="h-16 rounded-2xl px-6 text-lg" onClick={() => setReviewing(false)}>
               <ArrowLeft className="mr-2 size-5" /> Back
             </Button>
             <Button
