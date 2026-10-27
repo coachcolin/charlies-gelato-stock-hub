@@ -11,7 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   GROUP_LABEL,
   MAX_DAY_TRAYS,
-  MAX_WEEK_DAYS,
   TUBS_PER_TRAY,
   allergenGroup,
   applyMovements,
@@ -22,7 +21,6 @@ import {
   fetchReports,
   fetchSeason,
   formatTraysTubs,
-  planDays,
   type Flavour,
   type Unit,
 } from "@/lib/gelato";
@@ -85,7 +83,7 @@ function DayTabs({
   );
 }
 
-type Pick = { trays: number; tubs: number };
+type Pick = { trays: number; tubs: number; day: number };
 type Section = "gelato" | "sorbetto" | "allergen" | "special";
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "gelato", label: "Gelato" },
@@ -112,8 +110,7 @@ function ProductionPage() {
   const [sort, setSort] = useState<"min" | "alpha">("min");
   const [q, setQ] = useState("");
   const [dayCount, setDayCount] = useState(2);
-  const [sorbettoDay, setSorbettoDay] = useState(1);
-  const [plan, setPlan] = useState<Record<string, number> | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [selectedDay, setSelectedDay] = useState(1);
 
@@ -131,7 +128,7 @@ function ProductionPage() {
 
   const add = (id: string, unit: Unit, delta: number) =>
     setPicks((prev) => {
-      const cur = prev[id] ?? { trays: 0, tubs: 0 };
+      const cur = prev[id] ?? { trays: 0, tubs: 0, day: 1 };
       const next = { ...cur };
       if (unit === "tub") next.tubs = Math.max(0, cur.tubs + delta);
       else next.trays = Math.max(0, cur.trays + delta);
@@ -140,6 +137,9 @@ function ProductionPage() {
       else out[id] = next;
       return out;
     });
+
+  const setDay = (id: string, day: number) =>
+    setPicks((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], day } } : prev));
 
   const toggleOrder = (orderId: string) => {
     const order = activeOrders.find((o) => o.id === orderId);
@@ -153,26 +153,14 @@ function ProductionPage() {
 
   const chosen = Object.entries(picks)
     .map(([id, p]) => ({ flavour: byId.get(id), ...p }))
-    .filter((x): x is { flavour: Flavour; trays: number; tubs: number } => Boolean(x.flavour))
+    .filter((x): x is { flavour: Flavour; trays: number; tubs: number; day: number } => Boolean(x.flavour))
     .sort((a, b) => a.flavour.name.localeCompare(b.flavour.name));
   const totalTrays = chosen.reduce((t, c) => t + c.trays, 0);
   const totalTubs = chosen.reduce((t, c) => t + c.tubs, 0);
   const groupsPresent = new Set(chosen.map((c) => allergenGroup(c.flavour)));
   const separateNeeded = (["sorbetto", "gluten", "nuts"] as const).filter((g) => groupsPresent.has(g)).length;
 
-  const makePlan = () =>
-    setPlan(
-      planDays(
-        chosen.map((c) => ({
-          flavour_id: c.flavour.id,
-          trays: c.trays,
-          tubs: c.tubs,
-          group: allergenGroup(c.flavour),
-        })),
-        dayCount,
-        sorbettoDay,
-      ),
-    );
+  const makePlan = () => setReviewing(true);
 
   const createReport = useMutation({
     mutationFn: async () => {
