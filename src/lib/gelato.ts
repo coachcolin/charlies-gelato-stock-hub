@@ -628,3 +628,50 @@ export function scheduleWeek(
     [...b.items].sort((a, c) => rank[a.group] - rank[c.group]),
   );
 }
+
+/* ---------- hand-picked production plan ---------- */
+
+export type PlanItem = { flavour_id: string; trays: number; tubs: number; group: AllergenGroup };
+
+/**
+ * Suggest a day for each chosen flavour: sorbetti on the sorbetto day, gluten on its own
+ * other day, nuts on yet another day; plain gelato fills the least-full day.
+ * Returns flavour_id → day number (1-based).
+ */
+export function planDays(items: PlanItem[], days: number, sorbettoDay: number) {
+  const n = Math.max(1, days);
+  const load: number[] = Array.from({ length: n }, () => 0);
+  const size = (i: PlanItem) => i.trays + i.tubs / TUBS_PER_TRAY;
+  const has = (g: AllergenGroup) => items.some((i) => i.group === g);
+  const leastLoaded = (exclude: Set<number>) => {
+    let best = -1;
+    for (let d = 0; d < n; d++)
+      if (!exclude.has(d) && (best < 0 || load[d]! < load[best]!)) best = d;
+    return best < 0 ? load.indexOf(Math.min(...load)) : best;
+  };
+  const taken = new Set<number>();
+  const groupDay: Partial<Record<AllergenGroup, number>> = {};
+  if (has("sorbetto")) {
+    groupDay.sorbetto = Math.min(n, Math.max(1, sorbettoDay)) - 1;
+    taken.add(groupDay.sorbetto);
+  }
+  for (const g of ["gluten", "nuts"] as const) {
+    if (!has(g)) continue;
+    const d = leastLoaded(taken);
+    groupDay[g] = d;
+    taken.add(d);
+  }
+  const out: Record<string, number> = {};
+  for (const i of items) {
+    const d = groupDay[i.group];
+    if (i.group === "plain" || d === undefined) continue;
+    out[i.flavour_id] = d + 1;
+    load[d]! += size(i);
+  }
+  for (const i of [...items].filter((x) => x.group === "plain").sort((a, b) => size(b) - size(a))) {
+    const d = leastLoaded(new Set());
+    out[i.flavour_id] = d + 1;
+    load[d]! += size(i);
+  }
+  return out;
+}
