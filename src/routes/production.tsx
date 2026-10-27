@@ -490,38 +490,18 @@ function ProductionPage() {
           <div>
             <p className="font-display text-base">How many days are you making this week?</p>
             <div className="mt-2 flex gap-2">
-              {Array.from({ length: MAX_WEEK_DAYS }, (_, i) => i + 1).map((n) => (
+              {Array.from({ length: 7 }, (_, i) => i + 1).map((n) => (
                 <Button
                   key={n}
                   variant={dayCount === n ? "default" : "outline"}
                   className="h-12 flex-1 rounded-xl"
-                  onClick={() => {
-                    setDayCount(n);
-                    if (sorbettoDay > n) setSorbettoDay(1);
-                  }}
+                  onClick={() => setDayCount(n)}
                 >
                   {n}
                 </Button>
               ))}
             </div>
           </div>
-          {groupsPresent.has("sorbetto") && dayCount > 1 ? (
-            <div>
-              <p className="font-display text-base">Which day are sorbetti made?</p>
-              <div className="mt-2 flex gap-2">
-                {Array.from({ length: dayCount }, (_, i) => i + 1).map((n) => (
-                  <Button
-                    key={n}
-                    variant={sorbettoDay === n ? "default" : "outline"}
-                    className="h-12 flex-1 rounded-xl"
-                    onClick={() => setSorbettoDay(n)}
-                  >
-                    Day {n}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : null}
           {separateNeeded > dayCount ? (
             <p className="text-xs text-destructive">
               Sorbetti, gluten and nuts each need their own day — you need at least {separateNeeded} days.
