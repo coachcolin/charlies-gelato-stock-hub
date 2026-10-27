@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import { planDays, type PlanItem } from "./gelato";
 
 const item = (id: string, group: PlanItem["group"], trays = 4): PlanItem => ({
@@ -8,17 +9,17 @@ const item = (id: string, group: PlanItem["group"], trays = 4): PlanItem => ({
 describe("planDays", () => {
   it("puts sorbetti, gluten and nuts on three different days", () => {
     const plan = planDays([item("s", "sorbetto"), item("g", "gluten"), item("n", "nuts")], 3, 2);
-    expect(plan["s"]).toBe(2);
-    expect(new Set([plan["s"], plan["g"], plan["n"]]).size).toBe(3);
+    assert.equal(plan["s"], 2);
+    assert.equal(new Set([plan["s"], plan["g"], plan["n"]]).size, 3);
   });
   it("keeps nuts and gluten off the sorbetto day", () => {
     const plan = planDays([item("s", "sorbetto"), item("g", "gluten"), item("n", "nuts")], 4, 1);
-    expect(plan["g"]).not.toBe(1);
-    expect(plan["n"]).not.toBe(1);
-    expect(plan["g"]).not.toBe(plan["n"]);
+    assert.notEqual(plan["g"], 1);
+    assert.notEqual(plan["n"], 1);
+    assert.notEqual(plan["g"], plan["n"]);
   });
   it("puts plain gelato on the least-full day", () => {
     const plan = planDays([item("s", "sorbetto", 40), item("p", "plain", 8)], 2, 1);
-    expect(plan["p"]).toBe(2);
+    assert.equal(plan["p"], 2);
   });
 });
