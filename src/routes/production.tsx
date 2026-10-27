@@ -166,13 +166,13 @@ function ProductionPage() {
     mutationFn: async () => {
       const res = await db
         .from("production_reports")
-        .insert({ season: currentSeason, days: dayCount, sorbetto_day: sorbettoDay })
+        .insert({ season: currentSeason, days: dayCount })
         .select("id")
         .single();
       if (res.error) throw new Error(res.error.message);
       const id = res.data.id as string;
       const rows = [...chosen]
-        .sort((a, b) => (plan?.[a.flavour.id] ?? 1) - (plan?.[b.flavour.id] ?? 1))
+        .sort((a, b) => a.day - b.day || a.flavour.name.localeCompare(b.flavour.name))
         .map((c, idx) => ({
           report_id: id,
           flavour_id: c.flavour.id,
@@ -181,7 +181,7 @@ function ProductionPage() {
           suggested_tubs: c.tubs,
           reason: null,
           note: notes[c.flavour.id]?.trim() || null,
-          day_index: plan?.[c.flavour.id] ?? 1,
+          day_index: c.day,
           position: idx,
         }));
       const itemsRes = await db.from("production_report_items").insert(rows);
@@ -190,7 +190,7 @@ function ProductionPage() {
     onSuccess: () => {
       setPicks({});
       setTicked([]);
-      setPlan(null);
+      setReviewing(false);
       setNotes({});
       qc.invalidateQueries();
       toast.success("Production report started");
