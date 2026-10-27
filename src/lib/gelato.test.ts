@@ -8,17 +8,17 @@ const item = (id: string, group: PlanItem["group"], trays = 4): PlanItem => ({
 describe("planDays", () => {
   it("puts sorbetti, gluten and nuts on three different days", () => {
     const plan = planDays([item("s", "sorbetto"), item("g", "gluten"), item("n", "nuts")], 3, 2);
-    expect(plan.s).toBe(2);
-    expect(new Set([plan.s, plan.g, plan.n]).size).toBe(3);
+    expect(plan["s"]).toBe(2);
+    expect(new Set([plan["s"], plan["g"], plan["n"]]).size).toBe(3);
   });
   it("keeps nuts and gluten off the sorbetto day", () => {
     const plan = planDays([item("s", "sorbetto"), item("g", "gluten"), item("n", "nuts")], 4, 1);
-    expect(plan.g).not.toBe(1);
-    expect(plan.n).not.toBe(1);
-    expect(plan.g).not.toBe(plan.n);
+    expect(plan["g"]).not.toBe(1);
+    expect(plan["n"]).not.toBe(1);
+    expect(plan["g"]).not.toBe(plan["n"]);
   });
   it("puts plain gelato on the least-full day", () => {
     const plan = planDays([item("s", "sorbetto", 40), item("p", "plain", 8)], 2, 1);
-    expect(plan.p).toBe(2);
+    expect(plan["p"]).toBe(2);
   });
 });
