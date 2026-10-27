@@ -236,16 +236,14 @@ function ProductionPage() {
   };
 
   const row = (f: Flavour) => {
-    const min = desiredFor(f, currentSeason);
-    const g = gap(f);
     const pick = picks[f.id];
     return (
       <div key={f.id} className="px-3 py-1.5">
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1">
             <span className="block truncate font-display text-sm">{f.name}</span>
-            <span className={`block text-[11px] leading-tight ${g > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-              {f.stock_qty} / {min} min{g > 0 ? ` · ${g} short` : ""} · {f.tub_qty ?? 0} tubs
+            <span className="block text-[11px] leading-tight text-muted-foreground">
+              {formatTraysTubs(f.stock_qty, f.tub_qty ?? 0)} in stock
             </span>
           </span>
           {counter(f, "tray")}
