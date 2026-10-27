@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Plus, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -10,26 +9,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  BATCH_SIZE,
-  DEFAULT_DAY_CAPACITIES,
   GROUP_LABEL,
+  MAX_DAY_TRAYS,
+  MAX_WEEK_DAYS,
+  TUBS_PER_TRAY,
+  allergenGroup,
   applyMovements,
-  formatTraysTubs,
-  buildSuggestions,
-  fetchDayCapacities,
   db,
+  desiredFor,
   fetchFlavours,
-  fetchMovements,
   fetchOrders,
   fetchReports,
   fetchSeason,
-  isWeeklySeason,
-  recommendedDays,
-  separateDaysNeeded,
-  MAX_DAY_TRAYS,
-  scheduleWeek,
-  type AllergenGroup,
-  type ScheduledSuggestion,
+  formatTraysTubs,
+  planDays,
+  type Flavour,
+  type Unit,
 } from "@/lib/gelato";
 
 export const Route = createFileRoute("/production")({
@@ -41,28 +36,17 @@ export const Route = createFileRoute("/production")({
       {
         name: "description",
         content:
-          "Weekly gelato production plan built from stock levels, recent sales trends, wholesale commitments and seasonal targets.",
+          "Pick the trays and tubs to make this week, add wholesale orders and get a suggested day plan.",
       },
       { property: "og:title", content: "Production Report — Charlie's Gelato" },
       {
         property: "og:description",
-        content: "Know exactly which flavours to churn next, and tick them off as you make them.",
+        content: "Choose what to churn, plan the days, and tick flavours off as you make them.",
       },
     ],
   }),
   component: ProductionPage,
 });
-
-type Draft = {
-  flavour_id: string;
-  flavour_name: string;
-  qty: number;
-  tubs: number;
-  reason: string;
-  note: string;
-  day: number;
-  group: AllergenGroup;
-};
 
 function DayTabs({
   days,
@@ -73,7 +57,7 @@ function DayTabs({
   days: number[];
   selected: number;
   onSelect: (day: number) => void;
-  trayTotals?: Record<number, number>;
+  trayTotals?: Record<number, string>;
 }) {
   return (
     <div className="surface flex gap-1 rounded-2xl p-1">
@@ -85,17 +69,13 @@ function DayTabs({
             type="button"
             onClick={() => onSelect(day)}
             className={`flex h-12 flex-1 flex-col items-center justify-center rounded-xl transition-colors ${
-              active
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted"
+              active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
             }`}
           >
             <span className="font-display text-sm leading-tight">Day {day}</span>
             {trayTotals ? (
-              <span
-                className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-muted-foreground"}`}
-              >
-                {trayTotals[day] ?? 0} trays
+              <span className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-muted-foreground"}`}>
+                {trayTotals[day] ?? "0 trays"}
               </span>
             ) : null}
           </button>
@@ -105,327 +85,293 @@ function DayTabs({
   );
 }
 
+type Pick = { trays: number; tubs: number };
+type Section = "gelato" | "sorbetto" | "allergen" | "special";
+const SECTIONS: { key: Section; label: string }[] = [
+  { key: "gelato", label: "Gelato" },
+  { key: "sorbetto", label: "Sorbetto" },
+  { key: "allergen", label: "Contains gluten / nuts" },
+  { key: "special", label: "Specials" },
+];
+function sectionOf(f: Flavour): Section {
+  if (f.category === "special") return "special";
+  if (f.category === "sorbetto") return "sorbetto";
+  if (f.contains_gluten || f.contains_nuts) return "allergen";
+  return "gelato";
+}
+
 function ProductionPage() {
   const qc = useQueryClient();
-  const [draft, setDraft] = useState<Draft[] | null>(null);
-  const [sorbettoDay, setSorbettoDay] = useState(1);
-  const [selectedDay, setSelectedDay] = useState(1);
-
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
-  const movements = useQuery({ queryKey: ["movements"], queryFn: () => fetchMovements(120) });
   const orders = useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
   const season = useQuery({ queryKey: ["season"], queryFn: fetchSeason });
-  const capacities = useQuery({ queryKey: ["dayCapacities"], queryFn: fetchDayCapacities });
   const reports = useQuery({ queryKey: ["reports"], queryFn: fetchReports });
 
-  const activeReport = (reports.data ?? []).find((r) => r.status === "active");
+  const [picks, setPicks] = useState<Record<string, Pick>>({});
+  const [ticked, setTicked] = useState<string[]>([]);
+  const [sort, setSort] = useState<"min" | "alpha">("min");
+  const [q, setQ] = useState("");
+  const [dayCount, setDayCount] = useState(2);
+  const [sorbettoDay, setSorbettoDay] = useState(1);
+  const [plan, setPlan] = useState<Record<string, number> | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [selectedDay, setSelectedDay] = useState(1);
 
   const currentSeason = season.data ?? "mid";
-  const dayCapacity = Math.min(
-    MAX_DAY_TRAYS,
-    (capacities.data ?? DEFAULT_DAY_CAPACITIES)[currentSeason],
-  );
+  const activeReport = (reports.data ?? []).find((r) => r.status === "active");
+  const activeOrders = (orders.data ?? []).filter((o) => o.status === "active");
+  const byId = useMemo(() => new Map((flavours.data ?? []).map((f) => [f.id, f])), [flavours.data]);
 
-  const { scheduled, days } = useMemo(() => {
-    if (!flavours.data || !movements.data || !orders.data || !season.data)
-      return { scheduled: [] as ScheduledSuggestion[], days: 1 };
-    const activeOrders = orders.data.filter((o) => o.status === "active");
-    // Uncapped first, so we know how big the week needs to be.
-    const uncapped = buildSuggestions(
-      flavours.data,
-      movements.data,
-      activeOrders,
-      season.data,
-      0,
-    );
-    const needed = uncapped.reduce((t, s) => t + s.qty, 0);
-    const dayCount = recommendedDays(
-      needed,
-      dayCapacity,
-      season.data,
-      separateDaysNeeded(uncapped),
-    );
-    const fitted = buildSuggestions(
-      flavours.data,
-      movements.data,
-      activeOrders,
-      season.data,
-      dayCapacity * dayCount,
-    );
-    return {
-      scheduled: scheduleWeek(fitted, dayCount, dayCapacity, sorbettoDay),
-      days: dayCount,
-    };
-  }, [flavours.data, movements.data, orders.data, season.data, dayCapacity, sorbettoDay]);
+  const gap = (f: Flavour) => desiredFor(f, currentSeason) - f.stock_qty;
 
-  const weekly = isWeeklySeason(currentSeason);
+  const visible = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return (flavours.data ?? []).filter((f) => f.active && f.name.toLowerCase().includes(query));
+  }, [flavours.data, q]);
+
+  const add = (id: string, unit: Unit, delta: number) =>
+    setPicks((prev) => {
+      const cur = prev[id] ?? { trays: 0, tubs: 0 };
+      const next = { ...cur };
+      if (unit === "tub") next.tubs = Math.max(0, cur.tubs + delta);
+      else next.trays = Math.max(0, cur.trays + delta);
+      const out = { ...prev };
+      if (next.trays === 0 && next.tubs === 0) delete out[id];
+      else out[id] = next;
+      return out;
+    });
+
+  const toggleOrder = (orderId: string) => {
+    const order = activeOrders.find((o) => o.id === orderId);
+    if (!order) return;
+    const on = ticked.includes(orderId);
+    for (const i of order.items) {
+      if (i.flavour_id) add(i.flavour_id, i.unit === "tub" ? "tub" : "tray", on ? -i.qty : i.qty);
+    }
+    setTicked((t) => (on ? t.filter((x) => x !== orderId) : [...t, orderId]));
+  };
+
+  const chosen = Object.entries(picks)
+    .map(([id, p]) => ({ flavour: byId.get(id), ...p }))
+    .filter((x): x is { flavour: Flavour; trays: number; tubs: number } => Boolean(x.flavour))
+    .sort((a, b) => a.flavour.name.localeCompare(b.flavour.name));
+  const totalTrays = chosen.reduce((t, c) => t + c.trays, 0);
+  const totalTubs = chosen.reduce((t, c) => t + c.tubs, 0);
+  const groupsPresent = new Set(chosen.map((c) => allergenGroup(c.flavour)));
+  const separateNeeded = (["sorbetto", "gluten", "nuts"] as const).filter((g) => groupsPresent.has(g)).length;
+
+  const makePlan = () =>
+    setPlan(
+      planDays(
+        chosen.map((c) => ({
+          flavour_id: c.flavour.id,
+          trays: c.trays,
+          tubs: c.tubs,
+          group: allergenGroup(c.flavour),
+        })),
+        dayCount,
+        sorbettoDay,
+      ),
+    );
 
   const createReport = useMutation({
-    mutationFn: async (items: Draft[]) => {
+    mutationFn: async () => {
       const res = await db
         .from("production_reports")
-        .insert({ season: currentSeason, days, sorbetto_day: sorbettoDay })
+        .insert({ season: currentSeason, days: dayCount, sorbetto_day: sorbettoDay })
         .select("id")
         .single();
       if (res.error) throw new Error(res.error.message);
       const id = res.data.id as string;
-      const itemsRes = await db.from("production_report_items").insert(
-        items.map((i, idx) => ({
+      const rows = [...chosen]
+        .sort((a, b) => (plan?.[a.flavour.id] ?? 1) - (plan?.[b.flavour.id] ?? 1))
+        .map((c, idx) => ({
           report_id: id,
-          flavour_id: i.flavour_id,
-          flavour_name: i.flavour_name,
-          suggested_qty: i.qty,
-          suggested_tubs: i.tubs,
-          reason: i.reason,
-          note: i.note.trim() || null,
-          day_index: i.day,
+          flavour_id: c.flavour.id,
+          flavour_name: c.flavour.name,
+          suggested_qty: c.trays,
+          suggested_tubs: c.tubs,
+          reason: null,
+          note: notes[c.flavour.id]?.trim() || null,
+          day_index: plan?.[c.flavour.id] ?? 1,
           position: idx,
-        })),
-      );
+        }));
+      const itemsRes = await db.from("production_report_items").insert(rows);
       if (itemsRes.error) throw new Error(itemsRes.error.message);
     },
     onSuccess: () => {
-      setDraft(null);
+      setPicks({});
+      setTicked([]);
+      setPlan(null);
+      setNotes({});
       qc.invalidateQueries();
       toast.success("Production report started");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // ---- active report view ----
   if (activeReport) {
     return (
-      <ActiveReport
-        report={activeReport}
-        onDone={() => qc.invalidateQueries()}
-        season={season.data ?? "mid"}
-      />
+      <ActiveReport report={activeReport} onDone={() => qc.invalidateQueries()} season={currentSeason} />
     );
   }
 
-  // ---- draft / editing view ----
-  if (draft) {
-    const remaining = (flavours.data ?? []).filter(
-      (f) => f.active && !draft.some((d) => d.flavour_id === f.id),
+  const counter = (f: Flavour, unit: Unit) => {
+    const n = (unit === "tub" ? picks[f.id]?.tubs : picks[f.id]?.trays) ?? 0;
+    const step = unit === "tub" ? TUBS_PER_TRAY : 1;
+    return (
+      <div className="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          aria-label={`Less ${f.name} ${unit}s`}
+          disabled={n === 0}
+          onClick={() => add(f.id, unit, -step)}
+          className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90 disabled:opacity-30"
+        >
+          <Minus className="size-4" />
+        </button>
+        <span className={`w-6 text-center font-display text-sm ${n > 0 ? "text-primary" : "text-muted-foreground"}`}>
+          {n}
+        </span>
+        <button
+          type="button"
+          aria-label={`More ${f.name} ${unit}s`}
+          onClick={() => add(f.id, unit, step)}
+          className={`flex size-7 items-center justify-center rounded-full transition active:scale-90 ${
+            unit === "tub" ? "bg-sky text-sky-foreground" : "bg-primary text-primary-foreground"
+          }`}
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
     );
-    const draftDays = Array.from(
-      new Set([...draft.map((d) => d.day), ...Array.from({ length: days }, (_, i) => i + 1)]),
-    ).sort((a, b) => a - b);
+  };
+
+  const row = (f: Flavour) => {
+    const min = desiredFor(f, currentSeason);
+    const g = gap(f);
+    return (
+      <div key={f.id} className="flex items-center gap-2 px-3 py-1.5">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-display text-sm">{f.name}</span>
+          <span className={`block text-[11px] leading-tight ${g > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+            {f.stock_qty} / {min} min{g > 0 ? ` · ${g} short` : ""} · {f.tub_qty ?? 0} tubs
+          </span>
+        </span>
+        {counter(f, "tray")}
+        {counter(f, "tub")}
+      </div>
+    );
+  };
+
+  const header = (label: string) => (
+    <div className="flex items-end px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+      <h2 className="-ml-2 flex-1">{label}</h2>
+      <span className="w-[84px] text-center">Trays</span>
+      <span className="ml-2 w-[84px] text-center">Tubs</span>
+    </div>
+  );
+
+  // ---- day plan step ----
+  if (plan) {
+    const dayList = Array.from({ length: dayCount }, (_, i) => i + 1);
+    const day = Math.min(selectedDay, dayCount);
+    const dayItems = chosen.filter((c) => (plan[c.flavour.id] ?? 1) === day);
+    const totals = Object.fromEntries(
+      dayList.map((d) => {
+        const items = chosen.filter((c) => (plan[c.flavour.id] ?? 1) === d);
+        return [d, formatTraysTubs(items.reduce((t, c) => t + c.trays, 0), items.reduce((t, c) => t + c.tubs, 0))];
+      }),
+    );
+    const loadOf = (d: number) =>
+      chosen
+        .filter((c) => (plan[c.flavour.id] ?? 1) === d)
+        .reduce((t, c) => t + c.trays + c.tubs / TUBS_PER_TRAY, 0);
+    const overDays = dayList.filter((d) => loadOf(d) > MAX_DAY_TRAYS);
+    // Rule checks after manual moves.
+    const daysOf = (g: string) =>
+      new Set(chosen.filter((c) => allergenGroup(c.flavour) === g).map((c) => plan[c.flavour.id] ?? 1));
+    const sorbD = daysOf("sorbetto");
+    const glutD = daysOf("gluten");
+    const nutD = daysOf("nuts");
+    const clash = [...glutD].some((d) => nutD.has(d) || sorbD.has(d)) || [...nutD].some((d) => sorbD.has(d));
 
     return (
-      <AppShell
-        title="Review the plan"
-        subtitle={
-          weekly
-            ? `${days}-day week · sorbetti on day ${sorbettoDay}`
-            : "Adjust quantities, remove or add flavours"
-        }
-      >
+      <AppShell title="Day plan" subtitle={`${dayCount}-day week · ${formatTraysTubs(totalTrays, totalTubs)}`}>
         <div className="space-y-4 pb-28">
-          {weekly && draftDays.length > 1 ? (
-            <DayTabs
-              days={draftDays}
-              selected={selectedDay}
-              onSelect={setSelectedDay}
-              trayTotals={Object.fromEntries(
-                draftDays.map((day) => [
-                  day,
-                  draft.filter((d) => d.day === day).reduce((t, i) => t + i.qty, 0),
-                ]),
-              )}
-            />
-          ) : null}
-          {[
-            {
-              day: weekly && draftDays.length > 1 ? selectedDay : draftDays[0],
-              items:
-                weekly && draftDays.length > 1
-                  ? draft.filter((d) => d.day === selectedDay)
-                  : draft,
-            },
-          ].map(({ day, items }) => {
-            return (
-              <section key={day} className="space-y-2">
-                {items.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
-                    Nothing on day {day} yet.
-                  </p>
-                ) : null}
-                {items.map((d) => (
-                  <div key={d.flavour_id} className="surface space-y-3 p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-display text-base">
-                          {d.flavour_name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {d.group !== "plain" ? `${GROUP_LABEL[d.group]} · ` : ""}
-                          {d.reason}
-                        </span>
-                      </span>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        step={BATCH_SIZE}
-                        min={0}
-                        value={d.qty}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            (prev ?? []).map((x) =>
-                              x.flavour_id === d.flavour_id
-                                ? { ...x, qty: Math.max(0, Number(e.target.value) || 0) }
-                                : x,
-                            ),
-                          )
-                        }
-                        onBlur={(e) =>
-                          setDraft((prev) =>
-                            (prev ?? []).map((x) =>
-                              x.flavour_id === d.flavour_id
-                                ? {
-                                    ...x,
-                                    qty:
-                                      Math.ceil(
-                                        Math.max(0, Number(e.target.value) || 0) / BATCH_SIZE,
-                                      ) * BATCH_SIZE,
-                                  }
-                                : x,
-                            ),
-                          )
-                        }
-                        className="h-12 w-20 shrink-0 text-center font-display text-lg"
-                        aria-label={`${d.flavour_name} trays`}
-                      />
-                      <span className="sr-only">trays</span>
-
-                      <label className="flex shrink-0 flex-col items-center">
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          value={d.tubs}
-                          onChange={(e) =>
-                            setDraft((prev) =>
-                              (prev ?? []).map((x) =>
-                                x.flavour_id === d.flavour_id
-                                  ? { ...x, tubs: Math.max(0, Number(e.target.value) || 0) }
-                                  : x,
-                              ),
-                            )
-                          }
-                          className="h-12 w-16 text-center font-display text-lg"
-                          aria-label={`${d.flavour_name} tubs`}
-                        />
-                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">tubs</span>
-                      </label>
-
-                      <button
-                        type="button"
-                        aria-label={`Remove ${d.flavour_name}`}
-                        onClick={() =>
-                          setDraft((prev) =>
-                            (prev ?? []).filter((x) => x.flavour_id !== d.flavour_id),
-                          )
-                        }
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
-
-                    {weekly && draftDays.length > 1 ? (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Day</span>
-                        {draftDays.map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() =>
-                              setDraft((prev) =>
-                                (prev ?? []).map((x) =>
-                                  x.flavour_id === d.flavour_id ? { ...x, day: n } : x,
-                                ),
-                              )
-                            }
-                            className={`size-8 rounded-full text-sm font-semibold ${
-                              d.day === n
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <Textarea
-                      value={d.note}
-                      onChange={(e) =>
-                        setDraft((prev) =>
-                          (prev ?? []).map((x) =>
-                            x.flavour_id === d.flavour_id ? { ...x, note: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      placeholder="Notes for the ice-cream makers…"
-                      rows={2}
-                      className="min-h-11 resize-y rounded-xl text-sm"
-                      aria-label={`${d.flavour_name} production notes`}
-                    />
-                  </div>
+          <p className="px-1 text-sm text-muted-foreground">
+            Suggested days: sorbetti together, gluten at the end of a different day, and nuts at the end of another day. You can move anything.
+          </p>
+          {dayList.length > 1 ? <DayTabs days={dayList} selected={day} onSelect={setSelectedDay} trayTotals={totals} /> : null}
+          {overDays.length > 0 || clash || separateNeeded > dayCount ? (
+            <div className="surface flex gap-2 p-3 text-sm">
+              <AlertTriangle className="size-5 shrink-0 text-destructive" />
+              <div className="space-y-1">
+                {overDays.map((d) => (
+                  <p key={d}>Day {d} is over {MAX_DAY_TRAYS} trays.</p>
                 ))}
-              </section>
+                {clash || separateNeeded > dayCount ? (
+                  <p>Sorbetti, gluten and nuts should each be on their own day.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {dayItems.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Nothing on day {day}.</p>
+          ) : null}
+          {dayItems.map((c) => {
+            const g = allergenGroup(c.flavour);
+            return (
+              <div key={c.flavour.id} className="surface space-y-2 p-4">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display text-base">{c.flavour.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {g !== "plain" ? `${GROUP_LABEL[g]} · ` : ""}
+                      {formatTraysTubs(c.trays, c.tubs)}
+                    </span>
+                  </span>
+                </div>
+                {dayList.length > 1 ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Move to day</span>
+                    {dayList.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setPlan((p) => ({ ...(p ?? {}), [c.flavour.id]: n }))}
+                        className={`size-8 rounded-full text-sm font-semibold ${
+                          day === n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <Textarea
+                  value={notes[c.flavour.id] ?? ""}
+                  onChange={(e) => setNotes((n) => ({ ...n, [c.flavour.id]: e.target.value }))}
+                  placeholder="Notes for the ice-cream makers…"
+                  rows={2}
+                  className="min-h-11 resize-y rounded-xl text-sm"
+                  aria-label={`${c.flavour.name} production notes`}
+                />
+              </div>
             );
           })}
-
-          <AddFlavourSearch
-            remaining={remaining}
-            onAdd={(f) =>
-              setDraft((prev) => [
-                ...(prev ?? []),
-                {
-                  flavour_id: f.id,
-                  flavour_name: f.name,
-                  qty: BATCH_SIZE,
-                  tubs: 0,
-                  reason: "Added manually",
-                  note: "",
-                  day:
-                    f.category === "sorbetto"
-                      ? sorbettoDay
-                      : weekly && draftDays.length > 1
-                        ? selectedDay
-                        : 1,
-                  group:
-                    f.category === "sorbetto"
-                      ? "sorbetto"
-                      : f.contains_gluten
-                        ? "gluten"
-                        : f.contains_nuts
-                          ? "nuts"
-                          : "plain",
-                },
-              ])
-            }
-          />
         </div>
-
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur">
           <div className="mx-auto flex max-w-4xl gap-2">
-            <Button variant="outline" className="h-16 rounded-2xl" onClick={() => setDraft(null)}>
-              Cancel
+            <Button variant="outline" className="h-16 rounded-2xl px-6 text-lg" onClick={() => setPlan(null)}>
+              <ArrowLeft className="mr-2 size-5" /> Back
             </Button>
             <Button
               className="h-16 flex-1 rounded-2xl text-lg"
-              disabled={draft.filter((d) => d.qty > 0).length === 0 || createReport.isPending}
-              onClick={() =>
-                createReport.mutate(
-                  draft.filter((d) => d.qty > 0).sort((a, b) => a.day - b.day),
-                )
-              }
+              disabled={createReport.isPending}
+              onClick={() => createReport.mutate()}
             >
-              Start production report
+              <Check className="mr-2 size-6" /> Start production report
             </Button>
           </div>
         </div>
@@ -433,226 +379,180 @@ function ProductionPage() {
     );
   }
 
-  // ---- suggestion view ----
+  // ---- pick step ----
   const pastReports = (reports.data ?? []).filter((r) => r.status === "completed");
-  const totalTrays = scheduled.reduce((t, s) => t + s.qty, 0);
-  const dayList = Array.from({ length: days }, (_, i) => i + 1);
+  const sortedByGap = [...visible].sort((a, b) => gap(b) - gap(a) || a.name.localeCompare(b.name));
 
   return (
-    <AppShell title="Production Report" subtitle={weekly ? "This week's plan" : "What to make next"}>
-      <div className="surface mb-4 flex items-start gap-3 p-4">
-        <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" />
-        <p className="text-sm">
-          Based on recent sales, wholesale orders still to go out and your{" "}
-          <strong>{currentSeason} season</strong> minimums, this is what we think you'll need —{" "}
-          {totalTrays} trays
-          {weekly
-            ? ` over ${days} production ${days === 1 ? "day" : "days"} (${dayCapacity} trays a day)`
-            : ` in a ${dayCapacity}-tray production day`}
-          , in batches of {BATCH_SIZE}.
-        </p>
-      </div>
-
-      {weekly ? (
-        <div className="surface mb-4 p-4">
-          <p className="font-display text-base">Which day are sorbetti made?</p>
-          <p className="mb-3 text-xs text-muted-foreground">
-            All sorbetti run together on the same day.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {dayList.map((n) => (
-              <Button
-                key={n}
-                variant={sorbettoDay === n ? "default" : "outline"}
-                className="h-12 flex-1 rounded-xl"
-                onClick={() => setSorbettoDay(n)}
-              >
-                Day {n}
-              </Button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="space-y-4">
-        {weekly && dayList.length > 1 ? (
-          <DayTabs
-            days={dayList}
-            selected={selectedDay}
-            onSelect={setSelectedDay}
-            trayTotals={Object.fromEntries(
-              dayList.map((day) => [
-                day,
-                scheduled.filter((s) => s.day === day).reduce((t, i) => t + i.qty, 0),
-              ]),
-            )}
-          />
-        ) : null}
-        {(() => {
-          const items =
-            weekly && dayList.length > 1
-              ? scheduled.filter((s) => s.day === selectedDay)
-              : scheduled;
-          return (
-            <section className="space-y-2">
-              {weekly && dayList.length > 1 && items.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  Nothing scheduled on day {selectedDay}.
-                </p>
-              ) : null}
-              {items.map((s) => (
-                <div key={s.flavour_id} className="surface flex items-center gap-3 p-4">
+    <AppShell title="Production Report" subtitle={`Choose what to make · ${currentSeason} season`}>
+      <div className="space-y-4 pb-28">
+        {activeOrders.length > 0 ? (
+          <section className="surface space-y-2 p-4">
+            <p className="font-display text-base">Add wholesale orders to the plan</p>
+            {activeOrders.map((o) => {
+              const on = ticked.includes(o.id);
+              const tr = o.items.filter((i) => i.unit !== "tub").reduce((t, i) => t + i.qty, 0);
+              const tb = o.items.filter((i) => i.unit === "tub").reduce((t, i) => t + i.qty, 0);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => toggleOrder(o.id)}
+                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
+                    on ? "border-primary bg-primary/10" : "border-border"
+                  }`}
+                >
+                  <span
+                    className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${
+                      on ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                    }`}
+                  >
+                    {on ? <Check className="size-4" /> : null}
+                  </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-display text-base">{s.flavour_name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {s.group !== "plain" ? `${GROUP_LABEL[s.group]} · ` : ""}
-                      {s.reason}
+                    <span className="block truncate font-display text-sm">{o.wholesaler}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {formatTraysTubs(tr, tb)}
+                      {o.send_date ? ` · due ${new Date(o.send_date).toLocaleDateString()}` : ""}
                     </span>
                   </span>
-                  <span className="rounded-full bg-primary px-3 py-1.5 font-display text-lg text-primary-foreground">
-                    {s.qty}
-                  </span>
-                </div>
-              ))}
-            </section>
-          );
-        })()}
-        {scheduled.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            Everything is at or above its minimum — nothing urgent to make.
-          </p>
+                </button>
+              );
+            })}
+          </section>
         ) : null}
-      </div>
 
-      <Button
-        className="mt-6 h-16 w-full rounded-2xl text-lg"
-        onClick={() =>
-          setDraft(
-            scheduled.map((s) => ({
-              flavour_id: s.flavour_id,
-              flavour_name: s.flavour_name,
-              qty: s.qty,
-              tubs: s.tubsNeeded,
-              reason: s.reason,
-              note: "",
-              day: s.day,
-              group: s.group,
-            })),
-          )
-        }
-      >
-        Review &amp; create report
-      </Button>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search flavours…"
+            inputMode="search"
+            className="h-12 rounded-2xl pl-12 text-base"
+          />
+        </div>
 
-
-      {pastReports.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Past reports
-          </h2>
-          <div className="space-y-2">
-            {pastReports.slice(0, 10).map((r) => (
-              <div key={r.id} className="surface p-4 text-sm">
-                <p className="font-display text-base">
-                  {new Date(r.created_at).toLocaleDateString()} · {r.season} season
-                </p>
-                <p className="text-muted-foreground">
-                  {r.items.reduce((s, i) => s + (i.produced_qty ?? 0), 0)} trays made across{" "}
-                  {r.items.length} flavours
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-    </AppShell>
-  );
-}
-
-function AddFlavourSearch({
-  remaining,
-  onAdd,
-}: {
-  remaining: {
-    id: string;
-    name: string;
-    category?: string | null;
-    contains_gluten?: boolean | null;
-    contains_nuts?: boolean | null;
-  }[];
-  onAdd: (f: {
-    id: string;
-    name: string;
-    category?: string | null;
-    contains_gluten?: boolean | null;
-    contains_nuts?: boolean | null;
-  }) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const normalized = query.trim().toLowerCase();
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-  const filtered = normalized
-    ? remaining
-        .filter((f) => f.name.toLowerCase().includes(normalized))
-        .slice(0, 8)
-    : remaining.slice(0, 8);
-
-  return (
-    <div ref={ref} className="surface relative p-3">
-      <div className="flex items-center gap-2">
-        <Plus className="size-4 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Type to find a flavour to add…"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          className="h-11 rounded-xl border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-        />
-      </div>
-      {open && filtered.length > 0 ? (
-        <div className="absolute inset-x-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-2xl border border-border bg-card p-2 shadow-lg">
-          {filtered.map((f) => (
+        <div className="surface flex gap-1 rounded-2xl p-1">
+          {(
+            [
+              ["min", "Furthest from minimum"],
+              ["alpha", "A–Z by type"],
+            ] as const
+          ).map(([key, label]) => (
             <button
-              key={f.id}
+              key={key}
               type="button"
-              onClick={() => {
-                onAdd(f);
-                setQuery("");
-                setOpen(false);
-              }}
-              className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-muted"
+              onClick={() => setSort(key)}
+              className={`h-10 flex-1 rounded-xl text-sm font-semibold ${
+                sort === key ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+              }`}
             >
-              <span className="font-display text-base">{f.name}</span>
-              {f.category ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground">
-                  {f.category}
-                </span>
-              ) : null}
+              {label}
             </button>
           ))}
         </div>
-      ) : null}
-      {open && normalized && filtered.length === 0 ? (
-        <div className="absolute inset-x-0 top-full z-30 mt-1 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-lg">
-          No flavours match “{query}”
+
+        {sort === "min" ? (
+          <section className="space-y-1.5">
+            {header("All flavours")}
+            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+              {sortedByGap.map(row)}
+            </div>
+          </section>
+        ) : (
+          SECTIONS.map(({ key, label }) => {
+            const list = visible.filter((f) => sectionOf(f) === key).sort((a, b) => a.name.localeCompare(b.name));
+            if (list.length === 0) return null;
+            return (
+              <section key={key} className="space-y-1.5">
+                {header(label)}
+                <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+                  {list.map(row)}
+                </div>
+              </section>
+            );
+          })
+        )}
+
+        <section className="surface space-y-3 p-4">
+          <div>
+            <p className="font-display text-base">How many days are you making this week?</p>
+            <div className="mt-2 flex gap-2">
+              {Array.from({ length: MAX_WEEK_DAYS }, (_, i) => i + 1).map((n) => (
+                <Button
+                  key={n}
+                  variant={dayCount === n ? "default" : "outline"}
+                  className="h-12 flex-1 rounded-xl"
+                  onClick={() => {
+                    setDayCount(n);
+                    if (sorbettoDay > n) setSorbettoDay(1);
+                  }}
+                >
+                  {n}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {groupsPresent.has("sorbetto") && dayCount > 1 ? (
+            <div>
+              <p className="font-display text-base">Which day are sorbetti made?</p>
+              <div className="mt-2 flex gap-2">
+                {Array.from({ length: dayCount }, (_, i) => i + 1).map((n) => (
+                  <Button
+                    key={n}
+                    variant={sorbettoDay === n ? "default" : "outline"}
+                    className="h-12 flex-1 rounded-xl"
+                    onClick={() => setSorbettoDay(n)}
+                  >
+                    Day {n}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {separateNeeded > dayCount ? (
+            <p className="text-xs text-destructive">
+              Sorbetti, gluten and nuts each need their own day — you need at least {separateNeeded} days.
+            </p>
+          ) : null}
+        </section>
+
+        {pastReports.length > 0 ? (
+          <section>
+            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Past reports
+            </h2>
+            <div className="space-y-2">
+              {pastReports.slice(0, 10).map((r) => (
+                <div key={r.id} className="surface p-4 text-sm">
+                  <p className="font-display text-base">
+                    {new Date(r.created_at).toLocaleDateString()} · {r.season} season
+                  </p>
+                  <p className="text-muted-foreground">
+                    {formatTraysTubs(
+                      r.items.reduce((s, i) => s + (i.produced_qty ?? 0), 0),
+                      r.items.reduce((s, i) => s + (i.produced_tubs ?? 0), 0),
+                    )}{" "}
+                    made across {r.items.length} flavours
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      {chosen.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+          <div className="mx-auto max-w-4xl p-4">
+            <Button className="h-16 w-full rounded-2xl text-lg" onClick={makePlan}>
+              Plan the days · {formatTraysTubs(totalTrays, totalTubs)}
+            </Button>
+          </div>
         </div>
       ) : null}
-    </div>
+    </AppShell>
   );
 }
 
@@ -763,7 +663,7 @@ function ActiveReport({
             days={dayNumbers}
             selected={activeDay}
             onSelect={setSelectedDay}
-            trayTotals={dayTrayTotals}
+            trayTotals={Object.fromEntries(Object.entries(dayTrayTotals).map(([d, n]) => [d, `${n} trays`]))}
           />
         ) : null}
         <section className="space-y-2">
