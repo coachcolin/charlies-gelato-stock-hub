@@ -1,19 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+import { PRODUCTION_DRAFT_KEY, parseProductionDraft, productionDays } from "@/lib/production-plan";
 import {
   GROUP_LABEL,
   MAX_DAY_TRAYS,
   TUBS_PER_TRAY,
   allergenGroup,
-  applyMovements,
   db,
   desiredFor,
   fetchFlavours,
@@ -62,7 +63,7 @@ function DayTabs({
       {days.map((day) => {
         const active = day === selected;
         return (
-          <button
+          <Button
             key={day}
             type="button"
             onClick={() => onSelect(day)}
@@ -76,7 +77,7 @@ function DayTabs({
                 {trayTotals[day] ?? "0 trays"}
               </span>
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -113,9 +114,33 @@ function ProductionPage() {
   const [reviewing, setReviewing] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [selectedDay, setSelectedDay] = useState(1);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftId, setDraftId] = useState("");
+  const [draftError, setDraftError] = useState(false);
+  const [viewReportId, setViewReportId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const draft = parseProductionDraft(localStorage.getItem(PRODUCTION_DRAFT_KEY));
+      if (draft) {
+        setPicks(draft.picks); setTicked(draft.ticked); setDayCount(draft.dayCount);
+        setNotes(draft.notes); setReviewing(draft.reviewing); setDraftId(draft.id);
+      } else setDraftId(crypto.randomUUID());
+    } catch { setDraftError(true); setDraftId(crypto.randomUUID()); }
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    try {
+      localStorage.setItem(PRODUCTION_DRAFT_KEY, JSON.stringify({ id: draftId, picks, ticked, dayCount, notes, reviewing }));
+    } catch { setDraftError(true); }
+  }, [draftReady, draftId, picks, ticked, dayCount, notes, reviewing]);
 
   const currentSeason = season.data ?? "mid";
-  const activeReport = (reports.data ?? []).find((r) => r.status === "active");
+  const activeReport = viewReportId
+    ? (reports.data ?? []).find((r) => r.id === viewReportId)
+    : (reports.data ?? []).find((r) => r.status === "active");
   const activeOrders = (orders.data ?? []).filter((o) => o.status === "active");
   const byId = useMemo(() => new Map((flavours.data ?? []).map((f) => [f.id, f])), [flavours.data]);
 
@@ -164,17 +189,9 @@ function ProductionPage() {
 
   const createReport = useMutation({
     mutationFn: async () => {
-      const res = await db
-        .from("production_reports")
-        .insert({ season: currentSeason, days: dayCount })
-        .select("id")
-        .single();
-      if (res.error) throw new Error(res.error.message);
-      const id = res.data.id as string;
       const rows = [...chosen]
         .sort((a, b) => a.day - b.day || a.flavour.name.localeCompare(b.flavour.name))
         .map((c, idx) => ({
-          report_id: id,
           flavour_id: c.flavour.id,
           flavour_name: c.flavour.name,
           suggested_qty: c.trays,
@@ -184,23 +201,31 @@ function ProductionPage() {
           day_index: c.day,
           position: idx,
         }));
-      const itemsRes = await db.from("production_report_items").insert(rows);
-      if (itemsRes.error) throw new Error(itemsRes.error.message);
+      const res = await db.rpc("start_production_plan", { _request_id: draftId, _season: currentSeason, _days: dayCount, _items: rows });
+      if (res.error) throw new Error(res.error.message);
     },
     onSuccess: () => {
       setPicks({});
       setTicked([]);
       setReviewing(false);
       setNotes({});
+      setDraftId(crypto.randomUUID());
       qc.invalidateQueries();
       toast.success("Production report started");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => { toast.error(e.message); void qc.invalidateQueries({ queryKey: ["reports"] }); },
   });
+
+  if (reports.isPending || flavours.isPending || !draftReady) {
+    return <AppShell title="Production Report"><p role="status" className="py-8 text-center text-muted-foreground">Opening saved production plans…</p></AppShell>;
+  }
+  if (reports.isError || flavours.isError) {
+    return <AppShell title="Production Report"><p role="alert" className="py-4 text-destructive">Saved plans could not be loaded. Your plan has not been cleared.</p><Button onClick={() => { void reports.refetch(); void flavours.refetch(); }}>Try again</Button></AppShell>;
+  }
 
   if (activeReport) {
     return (
-      <ActiveReport report={activeReport} onDone={() => qc.invalidateQueries()} season={currentSeason} />
+      <ActiveReport key={activeReport.id} report={activeReport} onDone={() => { setViewReportId(null); void qc.invalidateQueries(); }} onBack={() => setViewReportId(null)} />
     );
   }
 
@@ -209,7 +234,7 @@ function ProductionPage() {
     const step = unit === "tub" ? TUBS_PER_TRAY : 1;
     return (
       <div className="flex shrink-0 items-center gap-0.5">
-        <button
+        <Button
           type="button"
           aria-label={`Less ${f.name} ${unit}s`}
           disabled={n === 0}
@@ -217,11 +242,11 @@ function ProductionPage() {
           className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground transition active:scale-90 disabled:opacity-30"
         >
           <Minus className="size-4" />
-        </button>
+        </Button>
         <span className={`w-6 text-center font-display text-sm ${n > 0 ? "text-primary" : "text-muted-foreground"}`}>
           {n}
         </span>
-        <button
+        <Button
           type="button"
           aria-label={`More ${f.name} ${unit}s`}
           onClick={() => add(f.id, unit, step)}
@@ -230,7 +255,7 @@ function ProductionPage() {
           }`}
         >
           <Plus className="size-4" />
-        </button>
+        </Button>
       </div>
     );
   };
@@ -253,7 +278,7 @@ function ProductionPage() {
           <div className="mt-1 flex items-center gap-1">
             <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Day</span>
             {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-              <button
+              <Button
                 key={n}
                 type="button"
                 aria-label={`Make ${f.name} on day ${n}`}
@@ -263,7 +288,7 @@ function ProductionPage() {
                 }`}
               >
                 {n}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
@@ -345,7 +370,7 @@ function ProductionPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Move to day</span>
                     {dayList.map((n) => (
-                      <button
+                      <Button
                         key={n}
                         type="button"
                         onClick={() => setDay(c.flavour.id, n)}
@@ -354,7 +379,7 @@ function ProductionPage() {
                         }`}
                       >
                         {n}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 ) : null}
@@ -525,12 +550,15 @@ function ProductionPage() {
                     )}{" "}
                     made across {r.items.length} flavours
                   </p>
+                  <Button variant="outline" className="mt-2" onClick={() => setViewReportId(r.id)}>View saved report</Button>
                 </div>
               ))}
             </div>
           </section>
         ) : null}
       </div>
+
+      {draftError ? <p role="alert" className="text-destructive">This device cannot save unfinished selections. Start the report before leaving.</p> : chosen.length > 0 ? <p role="status" className="mb-28 text-sm text-muted-foreground">Selections saved on this device. Started reports are shared with everyone.</p> : null}
 
       {chosen.length > 0 ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
@@ -547,27 +575,35 @@ function ProductionPage() {
 
 function ActiveReport({
   report,
-  season,
   onDone,
+  onBack,
 }: {
   report: Awaited<ReturnType<typeof fetchReports>>[number];
-  season: string;
   onDone: () => void;
+  onBack: () => void;
 }) {
   const qc = useQueryClient();
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [tubQtys, setTubQtys] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [editDays, setEditDays] = useState<Record<string, number>>({});
+  const [closeConfirm, setCloseConfirm] = useState(false);
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const savingQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const completed = report.status === "completed";
 
-  const saveNote = useMutation({
-    mutationFn: async ({ itemId, note }: { itemId: string; note: string }) => {
-      const res = await db
-        .from("production_report_items")
-        .update({ note: note.trim() || null })
-        .eq("id", itemId);
-      if (res.error) throw new Error(res.error.message);
+  const saveItem = useMutation({
+    mutationFn: async (args: { _item_id: string; _trays: number; _tubs: number; _day: number; _note: string }) => {
+      const task = savingQueue.current.catch(() => undefined).then(async () => {
+        const res = await db.rpc("save_production_item", args);
+        if (res.error) throw new Error(res.error.message);
+      });
+      savingQueue.current = task;
+      await task;
+      return args._item_id;
     },
+    onSuccess: (id) => { setSaved((s) => ({ ...s, [id]: true })); void qc.invalidateQueries({ queryKey: ["reports"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -580,27 +616,19 @@ function ActiveReport({
       name,
       qty,
       tubs,
+      day,
+      note,
     }: {
       itemId: string;
       flavourId: string | null;
       name: string;
       qty: number;
       tubs: number;
+      day: number;
+      note: string;
     }) => {
-      if (flavourId) {
-        await applyMovements(
-          [
-            { flavour_id: flavourId, qty, unit: "tray" },
-            { flavour_id: flavourId, qty: tubs, unit: "tub" },
-          ],
-          "production",
-          `Made ${name}`,
-        );
-      }
-      const res = await db
-        .from("production_report_items")
-        .update({ done: true, produced_qty: qty, produced_tubs: tubs })
-        .eq("id", itemId);
+      await savingQueue.current;
+      const res = await db.rpc("complete_production_item", { _item_id: itemId, _trays: qty, _tubs: tubs, _day: day, _note: note });
       if (res.error) throw new Error(res.error.message);
     },
     onSuccess: () => {
@@ -611,23 +639,20 @@ function ActiveReport({
   });
 
   const finish = useMutation({
-    mutationFn: async () => {
-      const res = await db
-        .from("production_reports")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", report.id);
+    mutationFn: async (allowUnfinished: boolean) => {
+      await savingQueue.current;
+      const res = await db.rpc("close_production_plan", { _report_id: report.id, _allow_unfinished: allowUnfinished });
       if (res.error) throw new Error(res.error.message);
     },
     onSuccess: () => {
       onDone();
       toast.success("Report closed");
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const outstanding = report.items.filter((i) => !i.done);
-  const dayNumbers = Array.from(new Set(report.items.map((i) => i.day_index ?? 1))).sort(
-    (a, b) => a - b,
-  );
+  const dayNumbers = productionDays(report.days, report.items.map((i) => editDays[i.id] ?? i.day_index ?? 1));
   const multiDay = dayNumbers.length > 1;
   const activeDay = selectedDay ?? dayNumbers[0] ?? 1;
   const dayTrayTotals = Object.fromEntries(
@@ -641,8 +666,8 @@ function ActiveReport({
 
   return (
     <AppShell
-      title="Active Production Report"
-      subtitle={`${outstanding.length} of ${report.items.length} left · ${season} season${
+      title={completed ? "Saved Production Report" : "Active Production Report"}
+      subtitle={`${outstanding.length} of ${report.items.length} left · ${report.season} season${
         multiDay ? ` · ${dayNumbers.length}-day week` : ""
       }`}
     >
@@ -661,6 +686,9 @@ function ActiveReport({
             .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           const tubValue = tubQtys[i.id] ?? i.produced_tubs ?? i.suggested_tubs ?? 0;
+          const dayValue = editDays[i.id] ?? i.day_index;
+          const noteValue = notes[i.id] ?? i.note ?? "";
+          const persist = () => saveItem.mutate({ _item_id: i.id, _trays: value, _tubs: tubValue, _day: dayValue, _note: noteValue });
           return (
             <div key={i.id} className={`surface space-y-3 p-4 ${i.done ? "opacity-60" : ""}`}>
 
@@ -673,32 +701,42 @@ function ActiveReport({
                       : `Suggested ${formatTraysTubs(i.suggested_qty, i.suggested_tubs ?? 0)}`}
                   </span>
                 </span>
-                {!i.done ? (
+                {!i.done && !completed ? (
                   <>
                     <Input
                       type="number"
                       inputMode="numeric"
+                      min={0}
+                      step={1}
+                      disabled={tick.isPending || finish.isPending}
                       value={value}
-                      onChange={(e) =>
+                      onBlur={persist}
+                      onChange={(e) => {
+                        setSaved((s) => ({ ...s, [i.id]: false }));
                         setQtys((q) => ({
                           ...q,
-                          [i.id]: Math.max(0, Number(e.target.value) || 0),
+                          [i.id]: Math.max(0, Math.floor(Number(e.target.value) || 0)),
                         }))
-                      }
-                      className="h-12 w-20 text-center font-display text-lg"
+                      }}
+                      className="h-12 w-14 sm:w-20 text-center font-display text-lg"
                       aria-label={`${i.flavour_name} trays made`}
                     />
                     <Input
                       type="number"
                       inputMode="numeric"
+                      min={0}
+                      step={1}
+                      disabled={tick.isPending || finish.isPending}
                       value={tubValue}
-                      onChange={(e) =>
+                      onBlur={persist}
+                      onChange={(e) => {
+                        setSaved((s) => ({ ...s, [i.id]: false }));
                         setTubQtys((q) => ({
                           ...q,
-                          [i.id]: Math.max(0, Number(e.target.value) || 0),
+                          [i.id]: Math.max(0, Math.floor(Number(e.target.value) || 0)),
                         }))
-                      }
-                      className="h-12 w-16 text-center font-display text-lg"
+                      }}
+                      className="h-12 w-14 sm:w-16 text-center font-display text-lg"
                       aria-label={`${i.flavour_name} tubs made`}
                       placeholder="tubs"
                     />
@@ -706,6 +744,7 @@ function ActiveReport({
                       size="icon"
                       className="size-12 shrink-0 rounded-full"
                       aria-label={`Mark ${i.flavour_name} as made`}
+                      disabled={tick.isPending || finish.isPending || saveItem.isPending}
                       onClick={() =>
                         tick.mutate({
                           itemId: i.id,
@@ -713,33 +752,50 @@ function ActiveReport({
                           name: i.flavour_name,
                           qty: value,
                           tubs: tubValue,
+                          day: dayValue,
+                          note: noteValue,
                         })
                       }
                     >
                       <Check className="size-5" />
                     </Button>
                   </>
-                ) : (
+                ) : i.done ? (
                   <span className="flex size-12 items-center justify-center rounded-full bg-sky text-sky-foreground">
                     <Check className="size-5" />
                   </span>
-                )}
+                ) : null}
               </div>
 
-              {i.done ? (
+              {i.done || completed ? (
                 i.note ? (
                   <p className="whitespace-pre-wrap text-sm text-muted-foreground">{i.note}</p>
                 ) : null
               ) : (
+                <>
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="mr-1 text-xs text-muted-foreground">Day</span>
+                  {Array.from({ length: 7 }, (_, n) => n + 1).map((d) => <Button key={d} size="icon" variant={dayValue === d ? "default" : "outline"} className="size-8" aria-label={`Make ${i.flavour_name} on day ${d}`} disabled={tick.isPending || saveItem.isPending || finish.isPending} onClick={() => {
+                    setEditDays((prev) => ({ ...prev, [i.id]: d }));
+                    setSaved((s) => ({ ...s, [i.id]: false }));
+                    saveItem.mutate({ _item_id: i.id, _trays: value, _tubs: tubValue, _day: d, _note: noteValue });
+                  }}>{d}</Button>)}
+                </div>
                 <Textarea
                   value={notes[i.id] ?? i.note ?? ""}
-                  onChange={(e) => setNotes((n) => ({ ...n, [i.id]: e.target.value }))}
-                  onBlur={(e) => saveNote.mutate({ itemId: i.id, note: e.target.value })}
+                  onChange={(e) => { setNotes((n) => ({ ...n, [i.id]: e.target.value })); setSaved((s) => ({ ...s, [i.id]: false })); }}
+                  onBlur={persist}
+                  disabled={tick.isPending || finish.isPending}
                   placeholder="Notes for the ice-cream makers…"
                   rows={2}
                   className="min-h-11 resize-y rounded-xl text-sm"
                   aria-label={`${i.flavour_name} production notes`}
                 />
+                <div className="flex items-center justify-between gap-2">
+                  <span role="status" className="text-xs text-muted-foreground">{saveItem.isPending ? "Saving…" : saved[i.id] === false ? "Unsaved changes" : "Saved"}</span>
+                  <Button variant="outline" size="sm" onClick={persist} disabled={saveItem.isPending || tick.isPending || finish.isPending}>Save changes</Button>
+                </div>
+                </>
               )}
             </div>
           );
@@ -748,13 +804,20 @@ function ActiveReport({
       </div>
 
 
-      <Button
+      {completed ? <Button variant="outline" className="mt-6 h-16 w-full" onClick={onBack}>Back to production</Button> : <Button
         variant={outstanding.length === 0 ? "default" : "outline"}
         className="mt-6 h-16 w-full rounded-2xl text-lg"
-        onClick={() => finish.mutate()}
+        disabled={finish.isPending || tick.isPending || saveItem.isPending}
+        onClick={() => outstanding.length > 0 ? setCloseConfirm(true) : finish.mutate(false)}
       >
         Close report
-      </Button>
+      </Button>}
+      <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Close an unfinished week?</AlertDialogTitle><AlertDialogDescription>{outstanding.length} flavours are still unfinished. The report stays in Past reports, but will no longer be the active plan.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Keep working</AlertDialogCancel><AlertDialogAction onClick={() => finish.mutate(true)}>Close unfinished report</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
