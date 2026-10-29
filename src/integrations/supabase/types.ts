@@ -230,6 +230,7 @@ export type Database = {
           created_at: string
           days: number
           id: string
+          request_id: string | null
           season: string
           sorbetto_day: number
           status: string
@@ -239,6 +240,7 @@ export type Database = {
           created_at?: string
           days?: number
           id?: string
+          request_id?: string | null
           season?: string
           sorbetto_day?: number
           status?: string
@@ -248,6 +250,7 @@ export type Database = {
           created_at?: string
           days?: number
           id?: string
+          request_id?: string | null
           season?: string
           sorbetto_day?: number
           status?: string
@@ -427,9 +430,42 @@ export type Database = {
             }
             Returns: string
           }
+      close_production_plan: {
+        Args: { _allow_unfinished?: boolean; _report_id: string }
+        Returns: undefined
+      }
+      complete_production_item: {
+        Args: {
+          _day: number
+          _item_id: string
+          _note: string
+          _trays: number
+          _tubs: number
+        }
+        Returns: boolean
+      }
       freezer_stock_take: {
         Args: { _counts: Json; _freezer_id: string }
         Returns: Json
+      }
+      save_production_item: {
+        Args: {
+          _day: number
+          _item_id: string
+          _note: string
+          _trays: number
+          _tubs: number
+        }
+        Returns: undefined
+      }
+      start_production_plan: {
+        Args: {
+          _days: number
+          _items: Json
+          _request_id: string
+          _season: string
+        }
+        Returns: string
       }
     }
     Enums: {
