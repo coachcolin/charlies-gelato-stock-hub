@@ -299,17 +299,15 @@ export async function fetchOrders(): Promise<
 export async function fetchReports(): Promise<
   (ProductionReport & { items: ProductionItem[] })[]
 > {
-  const reports = unwrap<ProductionReport[]>(
-    await db.from("production_reports").select("*").order("created_at", { ascending: false }),
+  const reports = unwrap<(ProductionReport & { production_report_items: ProductionItem[] })[]>(
+    await db.from("production_reports")
+      .select("*, production_report_items(*)")
+      .order("created_at", { ascending: false }),
   );
-  const items = unwrap<ProductionItem[]>(
-    await db
-      .from("production_report_items")
-      .select("*")
-      .order("day_index")
-      .order("position"),
-  );
-  return reports.map((r) => ({ ...r, items: items.filter((i) => i.report_id === r.id) }));
+  return reports.map(({ production_report_items, ...r }) => ({
+    ...r,
+    items: production_report_items.sort((a, b) => a.day_index - b.day_index || a.position - b.position),
+  }));
 }
 
 export { db };
