@@ -842,8 +842,93 @@ function ActiveReport({
           );
               })}
         </section>
+        {!completed ? (
+          <Button
+            variant="outline"
+            className="h-14 w-full rounded-2xl text-base"
+            onClick={() => { setAddDay(activeDay); setAddOpen(true); }}
+          >
+            <Plus className="mr-2 size-5" /> Add a flavour to this plan
+          </Button>
+        ) : null}
       </div>
 
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Add a flavour</DialogTitle></DialogHeader>
+          {!addFlavour ? (
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={addQuery}
+                  onChange={(e) => setAddQuery(e.target.value)}
+                  placeholder="Search flavours…"
+                  className="h-12 pl-9"
+                  aria-label="Search flavours to add"
+                />
+              </div>
+              <div className="space-y-1">
+                {(flavours.data ?? [])
+                  .filter((f) => f.active)
+                  .filter((f) => !outstanding.some((i) => i.flavour_id === f.id))
+                  .filter((f) => f.name.toLowerCase().includes(addQuery.trim().toLowerCase()))
+                  .map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className="surface flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition active:scale-[0.99]"
+                      onClick={() => setAddFlavour(f)}
+                    >
+                      <span className="font-display text-base">{f.name}</span>
+                      <span className="text-xs text-muted-foreground">{formatTraysTubs(f.stock_qty, f.tub_qty)} in stock</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" aria-label="Back to flavour search" onClick={() => setAddFlavour(null)}>
+                  <ArrowLeft className="size-5" />
+                </Button>
+                <p className="font-display text-lg">{addFlavour.name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number" inputMode="numeric" min={0} step={1}
+                  value={addTrays}
+                  onChange={(e) => setAddTrays(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  className="h-12 w-20 text-center font-display text-lg"
+                  aria-label={`${addFlavour.name} trays to make`}
+                />
+                <span className="text-sm text-muted-foreground">trays</span>
+                <Input
+                  type="number" inputMode="numeric" min={0} step={1}
+                  value={addTubs}
+                  onChange={(e) => setAddTubs(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  className="h-12 w-20 text-center font-display text-lg"
+                  aria-label={`${addFlavour.name} tubs to make`}
+                />
+                <span className="text-sm text-muted-foreground">tubs</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="mr-1 text-xs text-muted-foreground">Day</span>
+                {Array.from({ length: 7 }, (_, n) => n + 1).map((d) => (
+                  <Button key={d} size="icon" variant={addDay === d ? "default" : "outline"} className="size-8" aria-label={`Make ${addFlavour.name} on day ${d}`} onClick={() => setAddDay(d)}>{d}</Button>
+                ))}
+              </div>
+              <Button
+                className="h-14 w-full rounded-2xl text-base"
+                disabled={addItem.isPending || (addTrays === 0 && addTubs === 0)}
+                onClick={() => addItem.mutate({ flavourId: addFlavour.id, trays: addTrays, tubs: addTubs, day: addDay })}
+              >
+                Add to the plan
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {completed ? <Button variant="outline" className="mt-6 h-16 w-full" onClick={onBack}>Back to production</Button> : <Button
         variant={outstanding.length === 0 ? "default" : "outline"}
