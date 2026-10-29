@@ -410,6 +410,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_production_item: {
+        Args: {
+          _day: number
+          _flavour_id: string
+          _note?: string
+          _report_id: string
+          _trays: number
+          _tubs: number
+        }
+        Returns: string
+      }
       apply_stock_movements:
         | {
             Args: {
