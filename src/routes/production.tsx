@@ -593,6 +593,7 @@ function ActiveReport({
   onBack: () => void;
 }) {
   const qc = useQueryClient();
+  const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [tubQtys, setTubQtys] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -600,6 +601,12 @@ function ActiveReport({
   const [editDays, setEditDays] = useState<Record<string, number>>({});
   const [closeConfirm, setCloseConfirm] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const [addOpen, setAddOpen] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
+  const [addFlavour, setAddFlavour] = useState<Flavour | null>(null);
+  const [addTrays, setAddTrays] = useState(0);
+  const [addTubs, setAddTubs] = useState(0);
+  const [addDay, setAddDay] = useState(1);
   const savingQueue = useRef<Promise<unknown>>(Promise.resolve());
   const completed = report.status === "completed";
 
