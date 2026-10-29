@@ -78,14 +78,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Charlie's Gelato — Stock Manager" },
+      { name: "description", content: "Charlie's Gelato stock, wholesale orders and weekly production plans." },
+      { name: "author", content: "Charlie's Gelato" },
+      { property: "og:title", content: "Charlie's Gelato — Stock Manager" },
+      { property: "og:description", content: "Charlie's Gelato stock, wholesale orders and weekly production plans." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {

@@ -65,9 +65,10 @@ function DayTabs({
         return (
           <Button
             key={day}
+            variant="ghost"
             type="button"
             onClick={() => onSelect(day)}
-            className={`flex h-12 flex-1 flex-col items-center justify-center rounded-xl transition-colors ${
+            className={`flex h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-xl px-0 transition-colors ${
               active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
             }`}
           >
@@ -236,6 +237,8 @@ function ProductionPage() {
       <div className="flex shrink-0 items-center gap-0.5">
         <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label={`Less ${f.name} ${unit}s`}
           disabled={n === 0}
           onClick={() => add(f.id, unit, -step)}
@@ -248,6 +251,8 @@ function ProductionPage() {
         </span>
         <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label={`More ${f.name} ${unit}s`}
           onClick={() => add(f.id, unit, step)}
           className={`flex size-7 items-center justify-center rounded-full transition active:scale-90 ${
@@ -280,6 +285,8 @@ function ProductionPage() {
             {[1, 2, 3, 4, 5, 6, 7].map((n) => (
               <Button
                 key={n}
+                variant="ghost"
+                size="icon"
                 type="button"
                 aria-label={`Make ${f.name} on day ${n}`}
                 onClick={() => setDay(f.id, n)}
@@ -372,6 +379,8 @@ function ProductionPage() {
                     {dayList.map((n) => (
                       <Button
                         key={n}
+                        variant="ghost"
+                        size="icon"
                         type="button"
                         onClick={() => setDay(c.flavour.id, n)}
                         className={`size-8 rounded-full text-sm font-semibold ${
