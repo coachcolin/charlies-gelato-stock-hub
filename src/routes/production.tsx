@@ -668,6 +668,30 @@ function ActiveReport({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const addItem = useMutation({
+    mutationFn: async (args: { flavourId: string; trays: number; tubs: number; day: number }) => {
+      await savingQueue.current;
+      const res = await db.rpc("add_production_item", {
+        _report_id: report.id,
+        _flavour_id: args.flavourId,
+        _trays: args.trays,
+        _tubs: args.tubs,
+        _day: args.day,
+      });
+      if (res.error) throw new Error(res.error.message);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["reports"] });
+      toast.success("Added to the plan");
+      setAddOpen(false);
+      setAddFlavour(null);
+      setAddQuery("");
+      setAddTrays(0);
+      setAddTubs(0);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const outstanding = report.items.filter((i) => !i.done);
   const dayNumbers = productionDays(report.days, report.items.map((i) => editDays[i.id] ?? i.day_index ?? 1));
   const multiDay = dayNumbers.length > 1;
