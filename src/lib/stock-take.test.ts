@@ -39,6 +39,10 @@ describe("overall stock take", () => {
     const rows = combinedCounts([flavour], ids, { container: { tray: { cherry: 3 }, tub: {} } });
     const keeps = defaultKeeps(rows);
     assert.equal(keeps["cherry|tray"], undefined);
-    assert.equal(keeps["cherry|tub"], undefined);
+    assert.equal(keeps["cherry|tub"], true);
+  });
+  it("keeps nothing by default when both units were counted", () => {
+    const rows = combinedCounts([flavour], ids, { container: { tray: { cherry: 3 }, tub: { cherry: 8 } } });
+    assert.deepEqual(defaultKeeps(rows), {});
   });
 });
