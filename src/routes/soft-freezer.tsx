@@ -1,20 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Check, Minus, Plus, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
+import { SoftFreezerCollection } from "@/components/SoftFreezerCollection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVoiceStockTake } from "@/components/VoiceStockTake";
 import {
-  applyMovements,
   fetchFlavours,
   formatTraysTubs,
   type Flavour,
   type Unit,
 } from "@/lib/gelato";
+import { fetchCollectionOrders, startCollection } from "@/lib/soft-freezer";
 
 const k = (id: string, unit: Unit) => `${id}|${unit}`;
 const parseKey = (key: string) => {
@@ -61,6 +62,9 @@ function SoftFreezerOrder() {
   const qc = useQueryClient();
   const router = useRouter();
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
+  const orders = useQuery({ queryKey: ["soft-freezer-orders"], queryFn: fetchCollectionOrders, refetchInterval: 5000 });
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+  const requestId = useRef<string | null>(null);
   const [q, setQ] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [reviewing, setReviewing] = useState(false);
@@ -109,7 +113,7 @@ function SoftFreezerOrder() {
 
   const lines = Object.entries(counts).map(([key, qty]) => {
     const { id, unit } = parseKey(key);
-    return { flavour_id: id, qty: -qty, unit };
+    return { flavour_id: id, qty, unit };
   });
   let trays = 0;
   let tubs = 0;
@@ -139,24 +143,35 @@ function SoftFreezerOrder() {
     });
 
   const submit = useMutation({
-    mutationFn: () =>
-      applyMovements(lines, "removal", "Soft freezer order"),
-    onSuccess: () => {
-      qc.invalidateQueries();
-      toast.success(`${totalLabel} sent to the display freezer`);
+    mutationFn: () => {
+      requestId.current ??= crypto.randomUUID();
+      return startCollection(requestId.current, lines);
+    },
+    onSuccess: async (id) => {
+      setCollectionId(id);
+      await qc.invalidateQueries({ queryKey: ["soft-freezer-orders"] });
       setCounts({});
       setReviewing(false);
-      router.navigate({ to: "/" });
+      requestId.current = null;
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      void qc.invalidateQueries({ queryKey: ["soft-freezer-orders"] });
+    },
   });
+
+  const collection = orders.data?.find((order) => order.id === collectionId)
+    ?? orders.data?.find((order) => order.status === "active");
+  if (collection) return <SoftFreezerCollection order={collection} onDone={() => { router.navigate({ to: "/" }); }} />;
+  if (orders.isPending || collectionId) return <AppShell title="Soft Freezer Order"><p className="text-muted-foreground">Loading collection…</p></AppShell>;
+  if (orders.isError) return <AppShell title="Soft Freezer Order"><p className="mb-4 text-destructive">{orders.error.message}</p><Button variant="outline" onClick={() => orders.refetch()}>Try again</Button></AppShell>;
 
   if (reviewing) {
     return (
       <AppShell title="Review Soft Freezer Order" subtitle="Check before confirming">
         <div className="space-y-4 pb-28">
           <p className="px-1 text-sm text-muted-foreground">
-            These trays will be removed from stock and counted as gone to the display freezer.
+            {totalLabel} to collect.
           </p>
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
             {selected.map(({ flavour, qty, unit }) => (
@@ -228,11 +243,11 @@ function SoftFreezerOrder() {
             </Button>
             <Button
               className="h-16 flex-1 rounded-2xl text-lg"
-              disabled={submit.isPending || total === 0}
+              disabled={submit.isPending || total === 0 || !orders.isSuccess}
               onClick={() => submit.mutate()}
             >
               <Check className="mr-2 size-6" />
-              Confirm · {totalLabel} to display freezer
+              {submit.isPending ? "Saving…" : "Start collecting"}
             </Button>
           </div>
         </div>
