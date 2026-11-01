@@ -29,4 +29,16 @@ describe("overall stock take", () => {
     assert.deepEqual(parseStockTakeDraft(JSON.stringify(draft)), draft);
     assert.equal(parseStockTakeDraft('{"completed":[],"counts":{"kitchen":{"tray":{"cherry":-1},"tub":{}}}}'), null);
   });
+  it("defaults to keeping a unit that was never counted anywhere, e.g. a tub-only take", () => {
+    const rows = combinedCounts([flavour], ids, { kitchen: { tray: {}, tub: { cherry: 8 } } });
+    const keeps = defaultKeeps(rows);
+    assert.equal(keeps["cherry|tray"], true);
+    assert.equal(keeps["cherry|tub"], undefined);
+  });
+  it("does not default-keep a unit that was counted in any freezer", () => {
+    const rows = combinedCounts([flavour], ids, { container: { tray: { cherry: 3 }, tub: {} } });
+    const keeps = defaultKeeps(rows);
+    assert.equal(keeps["cherry|tray"], undefined);
+    assert.equal(keeps["cherry|tub"], undefined);
+  });
 });
