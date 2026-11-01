@@ -269,6 +269,15 @@ export async function freezerStockTake(
 }
 
 /** Move stock from one freezer to another (overall totals unchanged). */
+export async function overallStockTake(
+  freezers: { freezer_id: string; counts: { flavour_id: string; tray: number; tub: number }[] }[],
+  expected: { flavour_id: string; tray: number; tub: number }[],
+) {
+  const res = await db.rpc("overall_stock_take", { _freezers: freezers, _expected: expected });
+  if (res.error) throw new Error(res.error.message);
+  return res.data as { session_id: string; variances: { name: string; unit: Unit; before: number; after: number; diff: number }[] };
+}
+
 export async function moveStock(
   fromId: string,
   toId: string,
