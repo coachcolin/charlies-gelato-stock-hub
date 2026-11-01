@@ -1,0 +1,47 @@
+import type { Flavour, FreezerStock, Unit } from "./gelato";
+
+export type FreezerCount = { tray: Record<string, number>; tub: Record<string, number> };
+export type StockTakeDraft = { counts: Record<string, FreezerCount>; completed: string[] };
+export type OverallCount = { flavour_id: string; name: string; tray: number; tub: number; before: { tray: number; tub: number }; seenTray: boolean; seenTub: boolean };
+export const stockTakeKey = (id: string, unit: Unit) => `${id}|${unit}`;
+
+export function combinedCounts(flavours: Flavour[], freezerIds: string[], counts: StockTakeDraft["counts"]): OverallCount[] {
+  return flavours.map((f) => ({
+    flavour_id: f.id, name: f.name,
+    tray: freezerIds.reduce((sum, id) => sum + (counts[id]?.tray[f.id] ?? 0), 0),
+    tub: freezerIds.reduce((sum, id) => sum + (counts[id]?.tub[f.id] ?? 0), 0),
+    before: { tray: f.stock_qty, tub: f.tub_qty },
+    seenTray: freezerIds.some((id) => counts[id]?.tray[f.id] !== undefined),
+    seenTub: freezerIds.some((id) => counts[id]?.tub[f.id] !== undefined),
+  }));
+}
+
+/** Keep a globally uncounted unit in its old locations, preserving its overall total. */
+export function stockTakePayload(rows: OverallCount[], freezerIds: string[], counts: StockTakeDraft["counts"], stock: FreezerStock[], keep: Record<string, boolean>) {
+  return freezerIds.map((freezer_id, index) => ({ freezer_id, counts: rows.map((r) => {
+    const quantity = (unit: Unit) => {
+      const seen = unit === "tray" ? r.seenTray : r.seenTub;
+      if (seen || !keep[stockTakeKey(r.flavour_id, unit)]) return counts[freezer_id]?.[unit][r.flavour_id] ?? 0;
+      const total = r.before[unit];
+      const field = unit === "tray" ? "stock_qty" : "tub_qty";
+      const allocated = freezerIds.slice(0, -1).reduce((sum, id) => sum + Math.min(Math.max(0, total - sum), stock.find((s) => s.freezer_id === id && s.flavour_id === r.flavour_id)?.[field] ?? 0), 0);
+      if (index === freezerIds.length - 1) return Math.max(0, total - allocated);
+      const earlier = freezerIds.slice(0, index).reduce((sum, id) => sum + (stock.find((s) => s.freezer_id === id && s.flavour_id === r.flavour_id)?.[field] ?? 0), 0);
+      return Math.min(Math.max(0, total - earlier), stock.find((s) => s.freezer_id === freezer_id && s.flavour_id === r.flavour_id)?.[field] ?? 0);
+    };
+    return { flavour_id: r.flavour_id, tray: quantity("tray"), tub: quantity("tub") };
+  }) }));
+}
+
+export function parseStockTakeDraft(raw: string | null): StockTakeDraft | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (!value || !Array.isArray(value.completed) || !value.completed.every((id: unknown) => typeof id === "string") || !value.counts || typeof value.counts !== "object") return null;
+    for (const count of Object.values(value.counts) as FreezerCount[]) {
+      if (!count?.tray || !count?.tub) return null;
+      for (const unit of [count.tray, count.tub]) if (!Object.values(unit).every((n) => Number.isInteger(n) && n >= 0)) return null;
+    }
+    return value;
+  } catch { return null; }
+}

@@ -15,6 +15,13 @@
       "when": 1793302436909,
       "tag": "0001_atomic_production_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793569788036,
+      "tag": "0002_overall_stock_take",
+      "breakpoints": true
     }
   ]
 }
