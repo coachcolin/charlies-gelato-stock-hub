@@ -22,6 +22,13 @@
       "when": 1793569788036,
       "tag": "0002_overall_stock_take",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793574566435,
+      "tag": "0003_soft_freezer_collection",
+      "breakpoints": true
     }
   ]
 }

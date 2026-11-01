@@ -257,6 +257,81 @@ export type Database = {
         }
         Relationships: []
       }
+      soft_freezer_order_items: {
+        Row: {
+          collected_at: string | null
+          flavour_id: string
+          flavour_name: string
+          id: string
+          movement_session_id: string | null
+          order_id: string
+          position: number
+          qty: number
+          unit: string
+        }
+        Insert: {
+          collected_at?: string | null
+          flavour_id: string
+          flavour_name: string
+          id?: string
+          movement_session_id?: string | null
+          order_id: string
+          position: number
+          qty: number
+          unit: string
+        }
+        Update: {
+          collected_at?: string | null
+          flavour_id?: string
+          flavour_name?: string
+          id?: string
+          movement_session_id?: string | null
+          order_id?: string
+          position?: number
+          qty?: number
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "soft_freezer_order_items_flavour_id_fkey"
+            columns: ["flavour_id"]
+            isOneToOne: false
+            referencedRelation: "flavours"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "soft_freezer_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "soft_freezer_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      soft_freezer_orders: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          request_id: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          request_id: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          request_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       stock_movements: {
         Row: {
           account: string | null
@@ -445,6 +520,10 @@ export type Database = {
         Args: { _allow_unfinished?: boolean; _report_id: string }
         Returns: undefined
       }
+      collect_soft_freezer_item: {
+        Args: { _item_id: string }
+        Returns: boolean
+      }
       complete_production_item: {
         Args: {
           _day: number
@@ -480,6 +559,10 @@ export type Database = {
           _request_id: string
           _season: string
         }
+        Returns: string
+      }
+      start_soft_freezer_order: {
+        Args: { _items: Json; _request_id: string }
         Returns: string
       }
     }
