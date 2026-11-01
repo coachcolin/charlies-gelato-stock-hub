@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { combinedCounts, stockTakePayload, parseStockTakeDraft } from "./stock-take";
+import { combinedCounts, defaultKeeps, stockTakePayload, parseStockTakeDraft } from "./stock-take";
 import type { Flavour } from "./gelato";
 
 const flavour = { id: "cherry", name: "Cherry", stock_qty: 3, tub_qty: 8 } as Flavour;
