@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Search } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Printer, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -610,6 +610,8 @@ function ActiveReport({
   const savingQueue = useRef<Promise<unknown>>(Promise.resolve());
   const completed = report.status === "completed";
 
+  const flavourById = useMemo(() => new Map((flavours.data ?? []).map((f) => [f.id, f])), [flavours.data]);
+
   const saveItem = useMutation({
     mutationFn: async (args: { _item_id: string; _trays: number; _tubs: number; _day: number; _note: string }) => {
       const task = savingQueue.current.catch(() => undefined).then(async () => {
@@ -711,7 +713,19 @@ function ActiveReport({
       subtitle={`${outstanding.length} of ${report.items.length} left · ${report.season} season${
         multiDay ? ` · ${dayNumbers.length}-day week` : ""
       }`}
+      action={
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Print this report"
+          onClick={() => window.print()}
+          className="shrink-0 text-primary-foreground hover:bg-primary-foreground/15"
+        >
+          <Printer className="size-5" />
+        </Button>
+      }
     >
+      <PrintSheet report={report} completed={completed} multiDay={multiDay} dayNumbers={dayNumbers} flavourById={flavourById} />
       <div className="space-y-4">
         {multiDay ? (
           <DayTabs
@@ -945,5 +959,84 @@ function ActiveReport({
         </AlertDialogContent>
       </AlertDialog>
     </AppShell>
+  );
+}
+
+function PrintSheet({
+  report,
+  completed,
+  multiDay,
+  dayNumbers,
+  flavourById,
+}: {
+  report: Awaited<ReturnType<typeof fetchReports>>[number];
+  completed: boolean;
+  multiDay: boolean;
+  dayNumbers: number[];
+  flavourById: Map<string, Flavour>;
+}) {
+  const qtyOf = (i: { done: boolean; produced_qty: number | null; produced_tubs: number | null; suggested_qty: number; suggested_tubs: number }) => {
+    const showMade = i.done || completed;
+    return {
+      trays: showMade ? (i.produced_qty ?? i.suggested_qty) : i.suggested_qty,
+      tubs: showMade ? (i.produced_tubs ?? i.suggested_tubs ?? 0) : (i.suggested_tubs ?? 0),
+    };
+  };
+  const totalTrays = report.items.reduce((t, i) => t + qtyOf(i).trays, 0);
+  const totalTubs = report.items.reduce((t, i) => t + qtyOf(i).tubs, 0);
+
+  return (
+    <div className="print-sheet" aria-hidden="true">
+      <div className="flex items-baseline justify-between">
+        <h2 className="font-display font-bold">Production report — Charlie's Gelato</h2>
+        <p className="print-meta">
+          {new Date(report.created_at).toLocaleDateString()} · {report.season} season
+          {multiDay ? ` · ${dayNumbers.length}-day week` : ""}
+          {completed ? " · completed" : ""}
+        </p>
+      </div>
+      {dayNumbers.map((day) => {
+        const items = multiDay ? report.items.filter((i) => (i.day_index ?? 1) === day) : report.items;
+        if (items.length === 0) return null;
+        const dayTrays = items.reduce((t, i) => t + qtyOf(i).trays, 0);
+        return (
+          <section key={day}>
+            <h3>{multiDay ? `Day ${day} · ${dayTrays} trays` : `${dayTrays} trays to make`}</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Flavour</th>
+                  <th className="text-right">Trays</th>
+                  <th className="text-right">Tubs</th>
+                  <th className="text-center">Done</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((i) => {
+                  const { trays, tubs } = qtyOf(i);
+                  const fl = i.flavour_id ? flavourById.get(i.flavour_id) : undefined;
+                  const group = fl ? allergenGroup(fl) : "plain";
+                  return (
+                    <tr key={i.id}>
+                      <td>
+                        <span className="font-display font-semibold">{i.flavour_name}</span>
+                        {group !== "plain" ? <span className="print-group"> {GROUP_LABEL[group]}</span> : null}
+                        {i.note ? <span className="print-note">{i.note}</span> : null}
+                      </td>
+                      <td className="text-right">{trays}</td>
+                      <td className="text-right">{tubs}</td>
+                      <td className="text-center">{i.done ? "✓" : "☐"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+        );
+      })}
+      <p className="print-total">
+        {completed ? "Made" : "To make"}: {formatTraysTubs(totalTrays, totalTubs)} · Printed {new Date().toLocaleDateString()}
+      </p>
+    </div>
   );
 }
