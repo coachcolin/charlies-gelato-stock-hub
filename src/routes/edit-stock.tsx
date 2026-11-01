@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVoiceStockTake } from "@/components/VoiceStockTake";
 import { fetchFlavours, fetchFreezerStock, fetchFreezers, overallStockTake, type Unit } from "@/lib/gelato";
-import { combinedCounts, parseStockTakeDraft, stockTakeKey, stockTakePayload, type StockTakeDraft } from "@/lib/stock-take";
+import { combinedCounts, defaultKeeps, parseStockTakeDraft, stockTakeKey, stockTakePayload, type StockTakeDraft } from "@/lib/stock-take";
 
 export const Route = createFileRoute("/edit-stock")({
   head: () => ({ meta: [
@@ -90,8 +90,8 @@ function EditStock() {
   if (checking && allDone) return <AppShell title="Review Overall Stock" subtitle="All freezers combined">
     <div className="space-y-5 pb-28">
       {unseen.length > 0 && <section className="space-y-2"><h2 className="flex items-center gap-2 font-display"><EyeOff className="size-4" /> On record but not counted anywhere</h2>
-        {unseen.map((u) => { const kept = Boolean(keep[stockTakeKey(u.id, u.unit)]); return <div key={stockTakeKey(u.id, u.unit)} className="surface space-y-2 px-4 py-3">
-          <div className="font-display">{u.name}</div><p className="text-sm text-muted-foreground">Overall stock says {u.have} {u.unit === "tray" ? "trays" : "tubs"}; none counted across all freezers.</p>
+        {unseen.map((u) => { const key = stockTakeKey(u.id, u.unit); const kept = Boolean(keep[key]); const unitCounted = rows.some((r) => (u.unit === "tray" ? r.seenTray : r.seenTub)); return <div key={key} className="surface space-y-2 px-4 py-3">
+          <div className="font-display">{u.name}</div><p className="text-sm text-muted-foreground">{unitCounted ? `Overall stock says ${u.have} ${u.unit === "tray" ? "trays" : "tubs"}; none counted across all freezers.` : `${u.unit === "tray" ? "Trays" : "Tubs"} weren't counted in this stock take — the ${u.have} on record are kept unless you remove them.`}</p>
           <div className="flex gap-2"><Button size="sm" variant={kept ? "outline" : "default"} onClick={() => setKeep({ ...keep, [stockTakeKey(u.id, u.unit)]: false })}>Remove</Button><Button size="sm" variant={kept ? "default" : "outline"} onClick={() => setKeep({ ...keep, [stockTakeKey(u.id, u.unit)]: true })}>Keep {u.have}</Button></div>
         </div>; })}</section>}
       <section className="space-y-2"><h2 className="font-display">Changes vs overall stock</h2>{varianceRows(changes)}{!changes.length && <p className="text-muted-foreground">No changes. Overall stock matches.</p>}</section>
@@ -100,7 +100,7 @@ function EditStock() {
   </AppShell>;
   if (!freezerId) return <AppShell title="Stock Take" subtitle={`${ids.filter((id) => draft.completed.includes(id)).length} of ${ids.length} freezers counted`}>
     <div className="grid gap-3">{freezerList.map((f) => { const count = draft.counts[f.id]; const done = draft.completed.includes(f.id); return <Button key={f.id} variant="outline" className="surface h-auto justify-start gap-4 whitespace-normal px-5 py-5 text-left" onClick={() => { setFreezerId(f.id); setQ(""); }}><Snowflake className="size-6 shrink-0 text-sky-foreground" /><span className="min-w-0 flex-1"><span className="block font-display text-lg">{f.name}</span><span className="text-xs text-muted-foreground">{done ? `${Object.values(count?.tray ?? {}).reduce((a,b) => a+b,0)} trays · ${Object.values(count?.tub ?? {}).reduce((a,b) => a+b,0)} tubs counted` : "Not finished"}</span></span>{done && <Check className="size-5 shrink-0" />}</Button>; })}</div>
-    {allDone && <Button className="mt-6 h-16 w-full text-lg" onClick={() => setChecking(true)}>Review overall stock</Button>}
+    {allDone && <Button className="mt-6 h-16 w-full text-lg" onClick={() => { setKeep((prev) => { const next = defaultKeeps(rows); for (const u of unseen) { const key = stockTakeKey(u.id, u.unit); const prior = prev[key]; if (prior !== undefined) next[key] = prior; } return next; }); setChecking(true); }}>Review overall stock</Button>}
   </AppShell>;
   const list = allFlavours.filter((f) => (f.active || f.stock_qty > 0 || f.tub_qty > 0 || rows.some((r) => r.flavour_id === f.id && (r.tray > 0 || r.tub > 0))) && f.name.toLowerCase().includes(q.trim().toLowerCase()));
   return <AppShell title={`Stock take · ${freezer?.name ?? ""}`} subtitle="Count trays and tubs">

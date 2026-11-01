@@ -45,3 +45,15 @@ export function parseStockTakeDraft(raw: string | null): StockTakeDraft | null {
     return value;
   } catch { return null; }
 }
+
+/** A take that never counted a unit anywhere (e.g. a tub-only take) keeps that unit's stock by default. */
+export function defaultKeeps(rows: OverallCount[]): Record<string, boolean> {
+  const trayCounted = rows.some((r) => r.seenTray);
+  const tubCounted = rows.some((r) => r.seenTub);
+  const keeps: Record<string, boolean> = {};
+  for (const r of rows) {
+    if (!trayCounted && !r.seenTray && r.before.tray > 0) keeps[stockTakeKey(r.flavour_id, "tray")] = true;
+    if (!tubCounted && !r.seenTub && r.before.tub > 0) keeps[stockTakeKey(r.flavour_id, "tub")] = true;
+  }
+  return keeps;
+}
