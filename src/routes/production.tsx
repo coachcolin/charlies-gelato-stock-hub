@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Search } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Printer, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -609,6 +609,8 @@ function ActiveReport({
   const [addDay, setAddDay] = useState(1);
   const savingQueue = useRef<Promise<unknown>>(Promise.resolve());
   const completed = report.status === "completed";
+
+  const flavourById = useMemo(() => new Map((flavours.data ?? []).map((f) => [f.id, f])), [flavours.data]);
 
   const saveItem = useMutation({
     mutationFn: async (args: { _item_id: string; _trays: number; _tubs: number; _day: number; _note: string }) => {
