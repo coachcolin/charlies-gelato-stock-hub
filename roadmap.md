@@ -1,4 +1,10 @@
 # Overall stock take
+# Soft freezer collection
+- [ ] Preserve initial ordering and add a recoverable collection checklist.
+- [ ] Deduct each collected line atomically, once only.
+- [ ] Verify creation, collection, reopening and final completion.
+
+# Overall stock take
 - [x] Collect all freezer counts before a single overall review.
 - [x] Save combined stock take atomically and show total variance.
 - [x] Test combined counts, missing stock checks, and saving. Phone browser verified review and reload recovery; real database saving verified in a rolled-back test without changing stock.
