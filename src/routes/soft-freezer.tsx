@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Check, Minus, Plus, Search, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -65,6 +65,10 @@ function SoftFreezerOrder() {
   const orders = useQuery({ queryKey: ["soft-freezer-orders"], queryFn: fetchCollectionOrders, refetchInterval: 5000 });
   const [collectionId, setCollectionId] = useState<string | null>(null);
   const requestId = useRef<string | null>(null);
+  useEffect(() => {
+    const active = orders.data?.find((order) => order.status === "active");
+    if (active && !collectionId) setCollectionId(active.id);
+  }, [orders.data, collectionId]);
   const [q, setQ] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [reviewing, setReviewing] = useState(false);
