@@ -1,448 +1,114 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, Check, EyeOff, Search, Snowflake } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVoiceStockTake } from "@/components/VoiceStockTake";
-import {
-  fetchCountedFreezers,
-  fetchFlavours,
-  fetchFreezerStock,
-  fetchFreezers,
-  freezerStockMap,
-  freezerStockTake,
-  type Unit,
-} from "@/lib/gelato";
+import { fetchFlavours, fetchFreezerStock, fetchFreezers, overallStockTake, type Unit } from "@/lib/gelato";
+import { combinedCounts, parseStockTakeDraft, stockTakeKey, stockTakePayload, type StockTakeDraft } from "@/lib/stock-take";
 
 export const Route = createFileRoute("/edit-stock")({
-  head: () => ({
-    meta: [
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { title: "Edit Stock Levels — Charlie's Gelato" },
-      {
-        name: "description",
-        content:
-          "Stock take each freezer at Charlie's Gelato and see a variance report of what changed.",
-      },
-      { property: "og:title", content: "Edit Stock Levels — Charlie's Gelato" },
-      {
-        property: "og:description",
-        content: "Per-freezer stock takes with an automatic variance report.",
-      },
-    ],
-  }),
-  component: EditStock,
+  head: () => ({ meta: [
+    { title: "Stock Take — Charlie's Gelato" },
+    { name: "description", content: "Count all Charlie's Gelato freezers and review combined stock totals in one variance report." },
+    { property: "og:title", content: "Stock Take — Charlie's Gelato" },
+    { property: "og:description", content: "An overall stock review after all freezers have been counted." },
+    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
+  ] }), component: EditStock,
 });
-
-type Variance = { name: string; unit: Unit; before: number; after: number; diff: number; unseen?: boolean };
-type Unseen = { id: string; name: string; unit: Unit; have: number };
-
-const key = (id: string, unit: Unit) => `${id}|${unit}`;
+const STORAGE_KEY = "charlies-overall-stock-take-v1";
+type Variance = { name: string; unit: Unit; before: number; after: number; diff: number };
+const emptyDraft = (): StockTakeDraft => ({ counts: {}, completed: [] });
 
 function EditStock() {
   const qc = useQueryClient();
+  const [draft, setDraft] = useState<StockTakeDraft>(emptyDraft);
+  const [restored, setRestored] = useState(false);
   const [freezerId, setFreezerId] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [draft, setDraft] = useState<Record<string, number>>({});
-  const [tubDraft, setTubDraft] = useState<Record<string, number>>({});
   const [checking, setChecking] = useState(false);
-  /** For flavours on record but not seen: true = really gone (set to 0). */
-  const [goneChoice, setGoneChoice] = useState<Record<string, boolean>>({});
+  const [keep, setKeep] = useState<Record<string, boolean>>({});
   const [variances, setVariances] = useState<Variance[] | null>(null);
-  const [baselineMsg, setBaselineMsg] = useState<string | null>(null);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
+  useEffect(() => {
+    try { const saved = parseStockTakeDraft(localStorage.getItem(STORAGE_KEY)); if (saved) setDraft(saved); }
+    catch { toast.error("Saved counts could not be restored on this device."); }
+    setRestored(true);
+  }, []);
+  const updateDraft = (next: StockTakeDraft) => {
+    setDraft(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); }
+    catch { toast.error("Counts could not be saved on this device. Keep this page open."); }
+  };
   const flavours = useQuery({ queryKey: ["flavours"], queryFn: fetchFlavours });
   const freezers = useQuery({ queryKey: ["freezers"], queryFn: fetchFreezers });
-  const fstock = useQuery({ queryKey: ["freezer-stock"], queryFn: fetchFreezerStock });
-  const counted = useQuery({ queryKey: ["freezers-counted"], queryFn: fetchCountedFreezers });
-
-  const map = useMemo(() => freezerStockMap(fstock.data ?? []), [fstock.data]);
-  const rec = (id: string) => {
-    const r = freezerId ? map.get(`${id}:${freezerId}`) : undefined;
-    return { tray: r?.stock_qty ?? 0, tub: r?.tub_qty ?? 0 };
+  const stock = useQuery({ queryKey: ["freezer-stock"], queryFn: fetchFreezerStock });
+  const allFlavours = flavours.data ?? [];
+  const freezerList = freezers.data ?? [];
+  const ids = freezerList.map((f) => f.id);
+  const allDone = ids.length > 0 && ids.every((id) => draft.completed.includes(id));
+  const freezer = freezerList.find((f) => f.id === freezerId);
+  const current = freezerId ? draft.counts[freezerId] ?? { tray: {}, tub: {} } : { tray: {}, tub: {} };
+  const setCounts = (counts: typeof current) => {
+    if (!freezerId) return;
+    updateDraft({ ...draft, counts: { ...draft.counts, [freezerId]: counts } });
   };
-  const freezer = (freezers.data ?? []).find((f) => f.id === freezerId);
-  const countedIds = counted.data ?? [];
-  const isStarting = Boolean(freezerId) && !countedIds.includes(freezerId as string);
-
-  const voice = useVoiceStockTake(
-    flavours.data ?? [],
-    (counts) => {
-      setDraft((d) => ({ ...d, ...counts.tray }));
-      setTubDraft((d) => ({ ...d, ...counts.tub }));
-    },
-    { persistKey: `stock-take-${freezerId ?? "none"}` },
-  );
-
-  // flavours to show: active ones, plus inactive ones this freezer still has on record
-  const relevant = useMemo(
-    () =>
-      (flavours.data ?? []).filter((f) => {
-        const r = rec(f.id);
-        return f.active || r.tray > 0 || r.tub > 0;
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flavours.data, map, freezerId],
-  );
-
-  const list = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    return relevant.filter((f) => f.name.toLowerCase().includes(query));
-  }, [relevant, q]);
-
-  const unseen: Unseen[] = relevant.flatMap((f) => {
-    const r = rec(f.id);
-    const out: Unseen[] = [];
-    if (draft[f.id] === undefined && r.tray > 0) out.push({ id: f.id, name: f.name, unit: "tray", have: r.tray });
-    if (tubDraft[f.id] === undefined && r.tub > 0) out.push({ id: f.id, name: f.name, unit: "tub", have: r.tub });
-    return out;
-  });
-
-  const isGone = (u: Unseen) => goneChoice[key(u.id, u.unit)] ?? true;
-
-  const finalCounts = () =>
-    relevant.map((f) => {
-      const r = rec(f.id);
-      const tray = draft[f.id] ?? (isGone({ id: f.id, name: f.name, unit: "tray", have: r.tray }) ? 0 : r.tray);
-      const tub = tubDraft[f.id] ?? (isGone({ id: f.id, name: f.name, unit: "tub", have: r.tub }) ? 0 : r.tub);
-      return { flavour_id: f.id, name: f.name, tray, tub, before: r };
-    });
-
-  const changes = (): Variance[] =>
-    finalCounts().flatMap((c) => {
-      const out: Variance[] = [];
-      if (c.tray !== c.before.tray)
-        out.push({ name: c.name, unit: "tray", before: c.before.tray, after: c.tray, diff: c.tray - c.before.tray, unseen: draft[c.flavour_id] === undefined });
-      if (c.tub !== c.before.tub)
-        out.push({ name: c.name, unit: "tub", before: c.before.tub, after: c.tub, diff: c.tub - c.before.tub, unseen: tubDraft[c.flavour_id] === undefined });
-      return out;
-    });
-
-  const reset = () => {
-    setDraft({});
-    setTubDraft({});
-    setGoneChoice({});
-    setChecking(false);
-  };
-
+  const voice = useVoiceStockTake(allFlavours, (counts) => setCounts({ tray: { ...current.tray, ...counts.tray }, tub: { ...current.tub, ...counts.tub } }), { persistKey: `stock-take-${freezerId ?? "none"}` });
+  const rows = useMemo(() => combinedCounts(allFlavours, ids, draft.counts), [allFlavours, ids.join(","), draft.counts]);
+  const unseen = rows.flatMap((r) => (["tray", "tub"] as Unit[]).flatMap((unit) => (!(unit === "tray" ? r.seenTray : r.seenTub) && r.before[unit] > 0 ? [{ id: r.flavour_id, name: r.name, unit, have: r.before[unit] }] : [])));
+  const changes = rows.flatMap((r) => (["tray", "tub"] as Unit[]).flatMap((unit) => {
+    const seen = unit === "tray" ? r.seenTray : r.seenTub;
+    const after = !seen && keep[stockTakeKey(r.flavour_id, unit)] ? r.before[unit] : r[unit];
+    return after !== r.before[unit] ? [{ name: r.name, unit, before: r.before[unit], after, diff: after - r.before[unit] }] : [];
+  }));
   const save = useMutation({
-    mutationFn: () =>
-      freezerStockTake(
-        freezerId as string,
-        finalCounts().map(({ flavour_id, tray, tub }) => ({ flavour_id, tray, tub })),
-      ),
-    onSuccess: (res) => {
-      setVariances([...changes()].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)));
-      setBaselineMsg(
-        res.just_completed
-          ? "All 3 freezers now have starting counts. Overall stock totals now come from the freezers."
-          : !res.baseline_complete
-            ? "Starting count saved. Overall stock totals switch over once all 3 freezers are counted."
-            : null,
-      );
-      reset();
-      qc.invalidateQueries();
-      toast.success(`${freezer?.name ?? "Freezer"} stock take saved`);
+    mutationFn: async () => {
+      if (!allDone) throw new Error("Count all freezers first.");
+      return overallStockTake(stockTakePayload(rows, ids, draft.counts, stock.data ?? [], keep), rows.map((r) => ({ flavour_id: r.flavour_id, tray: r.before.tray, tub: r.before.tub })));
     },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: (result) => {
+      setVariances(result.variances.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)));
+      updateDraft(emptyDraft()); setChecking(false); setFreezerId(null); setKeep({});
+      qc.invalidateQueries(); toast.success("Overall stock take saved");
+    }, onError: (e: Error) => toast.error(e.message),
   });
-
-  /* ---------- variance report ---------- */
-  if (variances) {
-    return (
-      <AppShell title="Variance Report" subtitle={`${freezer?.name ?? ""} · what changed`}>
-        {baselineMsg ? (
-          <p className="mb-3 rounded-xl bg-sky/30 p-3 text-sm">{baselineMsg}</p>
-        ) : null}
-        <div className="space-y-2">
-          {variances.map((v) => (
-            <div key={`${v.name}-${v.unit}`} className="surface flex items-center gap-3 px-4 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-display">{v.name}</span>
-                {v.unseen ? (
-                  <span className="text-xs text-muted-foreground">Not seen in stock take</span>
-                ) : null}
-              </span>
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                {v.unit === "tub" ? "Tubs" : "Trays"}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {v.before} → {v.after}
-              </span>
-              <span
-                className={`rounded-full px-3 py-1 font-display ${
-                  v.diff < 0 ? "bg-primary text-primary-foreground" : "bg-sky text-sky-foreground"
-                }`}
-              >
-                {v.diff > 0 ? "+" : ""}
-                {v.diff}
-              </span>
-            </div>
-          ))}
-          {variances.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No variances. The system matched the shelf.
-            </p>
-          ) : null}
-        </div>
-        <Button
-          className="mt-6 h-14 w-full rounded-2xl"
-          onClick={() => {
-            setVariances(null);
-            setFreezerId(null);
-          }}
-        >
-          Done
-        </Button>
-      </AppShell>
-    );
-  }
-
-  /* ---------- step 1: pick freezer ---------- */
-  if (!freezerId) {
-    const total = (freezers.data ?? []).length;
-    const done = (freezers.data ?? []).filter((f) => countedIds.includes(f.id)).length;
-    return (
-      <AppShell title="Edit Stock Levels" subtitle="Which freezer are you stock taking?">
-        {done < total ? (
-          <p className="mb-4 rounded-xl bg-accent/30 p-3 text-sm text-accent-foreground">
-            Starting counts: {done} of {total} freezers done. Count every freezer once to set up
-            per-freezer stock. Overall totals switch over when all {total} are done.
-          </p>
-        ) : null}
-        <div className="grid gap-3">
-          {(freezers.data ?? []).map((f) => {
-            const items = (fstock.data ?? []).filter((r) => r.freezer_id === f.id);
-            const trays = items.reduce((s, r) => s + r.stock_qty, 0);
-            const tubs = items.reduce((s, r) => s + r.tub_qty, 0);
-            const last = items
-              .map((r) => r.counted_at)
-              .filter(Boolean)
-              .sort()
-              .at(-1);
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFreezerId(f.id)}
-                className="surface flex items-center gap-4 px-5 py-5 text-left active:scale-[0.99]"
-              >
-                <span className="flex size-12 items-center justify-center rounded-full bg-sky text-sky-foreground">
-                  <Snowflake className="size-6" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-display text-lg">{f.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {countedIds.includes(f.id)
-                      ? `${trays} trays · ${tubs} tubs on record${
-                          last ? ` · last counted ${new Date(last).toLocaleDateString()}` : ""
-                        }`
-                      : "Not counted yet"}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </AppShell>
-    );
-  }
-
-  /* ---------- step 3: end-of-count checks ---------- */
-  if (checking) {
-    const ch = changes();
-    return (
-      <AppShell title={`Check · ${freezer?.name ?? ""}`} subtitle="Before saving the stock take">
-        <div className="space-y-5 pb-28">
-          {unseen.length > 0 ? (
-            <section className="space-y-2">
-              <h2 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                <EyeOff className="size-4" /> On record but not seen
-              </h2>
-              <p className="px-1 text-sm text-muted-foreground">
-                These weren't counted. They'll be removed from this freezer unless you say they're
-                still there.
-              </p>
-              {unseen.map((u) => {
-                const gone = isGone(u);
-                return (
-                  <div key={key(u.id, u.unit)} className="surface flex items-center gap-3 px-4 py-3">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-display">{u.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        System says {u.have} {u.unit === "tub" ? "tubs" : "trays"}, none seen
-                      </span>
-                    </span>
-                    <div className="flex shrink-0 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setGoneChoice((g) => ({ ...g, [key(u.id, u.unit)]: true }))}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold ${gone ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-                      >
-                        Remove
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGoneChoice((g) => ({ ...g, [key(u.id, u.unit)]: false }))}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold ${!gone ? "bg-sky text-sky-foreground" : "bg-muted text-muted-foreground"}`}
-                      >
-                        Keep {u.have}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          ) : null}
-
-          <section className="space-y-2">
-            <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Changes vs {isStarting ? "nothing on record (starting count)" : "system"}
-            </h2>
-            {ch.map((v) => (
-              <div key={`${v.name}-${v.unit}`} className="surface flex items-center gap-3 px-4 py-2.5">
-                <span className="min-w-0 flex-1 truncate font-display text-sm">{v.name}</span>
-                <span className="text-xs font-semibold text-muted-foreground">
-                  {v.unit === "tub" ? "Tubs" : "Trays"}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {v.before} → {v.after}
-                </span>
-              </div>
-            ))}
-            {ch.length === 0 ? (
-              <p className="px-1 text-sm text-muted-foreground">No changes. Everything matches.</p>
-            ) : null}
-          </section>
-        </div>
-
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-          <div className="mx-auto flex max-w-4xl gap-3 p-4">
-            <Button variant="outline" className="h-16 rounded-2xl px-6 text-lg" onClick={() => setChecking(false)}>
-              <ArrowLeft className="mr-2 size-5" /> Back
-            </Button>
-            <Button
-              className="h-16 flex-1 rounded-2xl text-lg"
-              disabled={save.isPending}
-              onClick={() => save.mutate()}
-            >
-              <Check className="mr-2 size-6" /> Save stock take
-            </Button>
-          </div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  /* ---------- step 2: count ---------- */
-  const focusNext = (idx: number) => inputRefs.current[idx + 1]?.focus();
-  const enteredCount = Object.keys(draft).length + Object.keys(tubDraft).length;
-
-  return (
-    <AppShell title={`Stock take · ${freezer?.name ?? ""}`} subtitle="Record or type what you can see">
-      <button
-        type="button"
-        onClick={() => {
-          reset();
-          setFreezerId(null);
-        }}
-        className="mb-3 flex items-center gap-1 text-sm font-semibold text-muted-foreground"
-      >
-        <ArrowLeft className="size-4" /> Change freezer
-      </button>
-      {isStarting ? (
-        <p className="mb-3 rounded-xl bg-accent/30 p-3 text-sm text-accent-foreground">
-          Starting count for this freezer. Everything you count becomes its stock.
-        </p>
-      ) : null}
-
-      {voice.panel}
-
-      <div className="relative mb-3">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search flavours…"
-          className="h-13 rounded-2xl pl-12 text-base"
-        />
-      </div>
-
-      <div className="mb-2 flex justify-end gap-2 pr-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        <span className="w-20 text-center">Trays</span>
-        <span className="w-20 text-center">Tubs</span>
-      </div>
-
-      <div className="space-y-2 pb-24">
-        {list.map((f, i) => {
-          const r = rec(f.id);
-          const trayEntered = draft[f.id] !== undefined;
-          const tubEntered = tubDraft[f.id] !== undefined;
-          const box = (
-            value: number | undefined,
-            placeholder: number,
-            idx: number,
-            set: typeof setDraft,
-            label: string,
-          ) => (
-            <Input
-              ref={(el) => {
-                inputRefs.current[idx] = el;
-              }}
-              type="number"
-              inputMode="numeric"
-              value={value ?? ""}
-              placeholder={String(placeholder)}
-              onChange={(e) =>
-                set((d) => {
-                  if (e.target.value === "") {
-                    const n = { ...d };
-                    delete n[f.id];
-                    return n;
-                  }
-                  return { ...d, [f.id]: Math.max(0, Math.round(Number(e.target.value) || 0)) };
-                })
-              }
-              onFocus={(e) => e.target.select()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  focusNext(idx);
-                }
-              }}
-              className={`h-12 w-20 text-center font-display text-lg ${value !== undefined ? "border-primary" : ""}`}
-              aria-label={`${f.name} ${label}`}
-            />
-          );
-          return (
-            <div key={f.id} className="surface flex items-center gap-2 px-4 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-display text-base">{f.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  system says {r.tray} trays · {r.tub} tubs
-                  {trayEntered || tubEntered ? " · counted" : ""}
-                </span>
-              </span>
-              {box(draft[f.id], r.tray, i * 2, setDraft, "trays")}
-              {box(tubDraft[f.id], r.tub, i * 2 + 1, setTubDraft, "tubs")}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur">
-        <div className="mx-auto max-w-4xl">
-          <Button className="h-16 w-full rounded-2xl text-lg" onClick={() => setChecking(true)}>
-            Finish & check · {enteredCount} counted
-          </Button>
-        </div>
-      </div>
-    </AppShell>
-  );
+  const varianceRows = (items: Variance[]) => items.map((v) => <div key={`${v.name}-${v.unit}`} className="surface flex items-center gap-2 px-3 py-3">
+    <span className="min-w-0 flex-1 break-words font-display">{v.name}</span>
+    <span className="shrink-0 text-xs text-muted-foreground">{v.unit === "tray" ? "Trays" : "Tubs"}</span>
+    <span className="shrink-0 text-sm">{v.before} → {v.after}</span>
+    <span className={`shrink-0 rounded-full px-2 py-1 font-display ${v.diff < 0 ? "bg-primary text-primary-foreground" : "bg-sky text-sky-foreground"}`}>{v.diff > 0 ? "+" : ""}{v.diff}</span>
+  </div>);
+  if (variances) return <AppShell title="Overall Variance Report" subtitle="All freezers combined">
+    <div className="mb-4 flex gap-4 font-display"><span>Trays: {variances.filter((v) => v.unit === "tray").reduce((s, v) => s + v.diff, 0)}</span><span>Tubs: {variances.filter((v) => v.unit === "tub").reduce((s, v) => s + v.diff, 0)}</span></div>
+    <div className="space-y-2">{varianceRows(variances)}{!variances.length && <p className="py-8 text-center text-muted-foreground">No variances. Overall stock matches the count.</p>}</div>
+    <Button className="mt-6 h-14 w-full" onClick={() => setVariances(null)}>Done</Button>
+  </AppShell>;
+  if (!restored || flavours.isPending || freezers.isPending || stock.isPending) return <AppShell title="Stock Take"><p>Loading stock…</p></AppShell>;
+  if (flavours.isError || freezers.isError || stock.isError) return <AppShell title="Stock Take"><p>Stock could not be loaded.</p><Button onClick={() => qc.invalidateQueries()}>Try again</Button></AppShell>;
+  if (checking && allDone) return <AppShell title="Review Overall Stock" subtitle="All freezers combined">
+    <div className="space-y-5 pb-28">
+      {unseen.length > 0 && <section className="space-y-2"><h2 className="flex items-center gap-2 font-display"><EyeOff className="size-4" /> On record but not counted anywhere</h2>
+        {unseen.map((u) => { const kept = Boolean(keep[stockTakeKey(u.id, u.unit)]); return <div key={stockTakeKey(u.id, u.unit)} className="surface space-y-2 px-4 py-3">
+          <div className="font-display">{u.name}</div><p className="text-sm text-muted-foreground">Overall stock says {u.have} {u.unit === "tray" ? "trays" : "tubs"}; none counted across all freezers.</p>
+          <div className="flex gap-2"><Button size="sm" variant={kept ? "outline" : "default"} onClick={() => setKeep({ ...keep, [stockTakeKey(u.id, u.unit)]: false })}>Remove</Button><Button size="sm" variant={kept ? "default" : "outline"} onClick={() => setKeep({ ...keep, [stockTakeKey(u.id, u.unit)]: true })}>Keep {u.have}</Button></div>
+        </div>; })}</section>}
+      <section className="space-y-2"><h2 className="font-display">Changes vs overall stock</h2>{varianceRows(changes)}{!changes.length && <p className="text-muted-foreground">No changes. Overall stock matches.</p>}</section>
+    </div>
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur"><div className="mx-auto flex max-w-4xl gap-3"><Button variant="outline" className="h-14" disabled={save.isPending} onClick={() => setChecking(false)}><ArrowLeft className="mr-2 size-4" />Back</Button><Button className="h-14 flex-1" disabled={save.isPending} onClick={() => save.mutate()}><Check className="mr-2 size-5" />{save.isPending ? "Saving…" : "Save overall stock take"}</Button></div></div>
+  </AppShell>;
+  if (!freezerId) return <AppShell title="Stock Take" subtitle={`${ids.filter((id) => draft.completed.includes(id)).length} of ${ids.length} freezers counted`}>
+    <div className="grid gap-3">{freezerList.map((f) => { const count = draft.counts[f.id]; const done = draft.completed.includes(f.id); return <Button key={f.id} variant="outline" className="surface h-auto justify-start gap-4 whitespace-normal px-5 py-5 text-left" onClick={() => { setFreezerId(f.id); setQ(""); }}><Snowflake className="size-6 shrink-0 text-sky-foreground" /><span className="min-w-0 flex-1"><span className="block font-display text-lg">{f.name}</span><span className="text-xs text-muted-foreground">{done ? `${Object.values(count?.tray ?? {}).reduce((a,b) => a+b,0)} trays · ${Object.values(count?.tub ?? {}).reduce((a,b) => a+b,0)} tubs counted` : "Not finished"}</span></span>{done && <Check className="size-5 shrink-0" />}</Button>; })}</div>
+    {allDone && <Button className="mt-6 h-16 w-full text-lg" onClick={() => setChecking(true)}>Review overall stock</Button>}
+  </AppShell>;
+  const list = allFlavours.filter((f) => (f.active || f.stock_qty > 0 || f.tub_qty > 0 || rows.some((r) => r.flavour_id === f.id && (r.tray > 0 || r.tub > 0))) && f.name.toLowerCase().includes(q.trim().toLowerCase()));
+  return <AppShell title={`Stock take · ${freezer?.name ?? ""}`} subtitle="Count trays and tubs">
+    <Button variant="ghost" className="mb-3" onClick={() => setFreezerId(null)}><ArrowLeft className="mr-2 size-4" />All freezers</Button>
+    {voice.panel}
+    <div className="relative mb-3"><Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input className="h-13 pl-12" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search flavours…" /></div>
+    <div className="mb-2 flex justify-end gap-2 pr-3 text-xs font-semibold text-muted-foreground"><span className="w-16 text-center">Trays</span><span className="w-16 text-center">Tubs</span></div>
+    <div className="space-y-2 pb-28">{list.map((f) => <div className="surface flex items-center gap-2 px-3 py-3" key={f.id}><span className="min-w-0 flex-1 break-words font-display">{f.name}</span>{(["tray", "tub"] as Unit[]).map((unit) => <Input key={unit} type="number" inputMode="numeric" min={0} className="h-12 w-16 shrink-0 text-center font-display text-lg" aria-label={`${f.name} ${unit === "tray" ? "trays" : "tubs"}`} value={current[unit][f.id] ?? ""} placeholder="—" onFocus={(e) => e.target.select()} onChange={(e) => { const values = { ...current[unit] }; if (!e.target.value) delete values[f.id]; else values[f.id] = Math.max(0, Math.round(Number(e.target.value) || 0)); setCounts({ ...current, [unit]: values }); }} />)}</div>)}</div>
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur"><div className="mx-auto max-w-4xl"><Button className="h-16 w-full text-lg" onClick={() => { updateDraft({ ...draft, counts: { ...draft.counts, [freezerId]: current }, completed: [...new Set([...draft.completed, freezerId])] }); setFreezerId(null); }}>Finish this freezer <Check className="ml-2 size-5" /></Button></div></div>
+  </AppShell>;
 }
