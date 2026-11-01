@@ -713,7 +713,19 @@ function ActiveReport({
       subtitle={`${outstanding.length} of ${report.items.length} left · ${report.season} season${
         multiDay ? ` · ${dayNumbers.length}-day week` : ""
       }`}
+      action={
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Print this report"
+          onClick={() => window.print()}
+          className="shrink-0 text-primary-foreground hover:bg-primary-foreground/15"
+        >
+          <Printer className="size-5" />
+        </Button>
+      }
     >
+      <PrintSheet report={report} completed={completed} multiDay={multiDay} dayNumbers={dayNumbers} flavourById={flavourById} />
       <div className="space-y-4">
         {multiDay ? (
           <DayTabs
