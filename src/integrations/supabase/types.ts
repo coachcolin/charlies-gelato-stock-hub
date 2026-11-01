@@ -459,6 +459,10 @@ export type Database = {
         Args: { _counts: Json; _freezer_id: string }
         Returns: Json
       }
+      overall_stock_take: {
+        Args: { _expected: Json; _freezers: Json }
+        Returns: Json
+      }
       save_production_item: {
         Args: {
           _day: number
