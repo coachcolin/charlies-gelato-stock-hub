@@ -1,9 +1,9 @@
-# Production plan reliability
 # Overall stock take
-- [ ] Collect all freezer counts before a single overall review.
-- [ ] Save combined stock take atomically and show total variance.
-- [ ] Test combined counts, missing stock checks, and saving.
+- [x] Collect all freezer counts before a single overall review.
+- [x] Save combined stock take atomically and show total variance.
+- [x] Test combined counts, missing stock checks, and saving. Phone browser verified review and reload recovery; real database saving verified in a rolled-back test without changing stock.
 
+# Production plan reliability
 - [x] Reproduce disappearing drafts and unsaved daily edits.
 - [x] Make creation and stock completion atomic; preserve drafts and daily edits.
 - [x] Test a real multi-day plan through creation, fresh visits, edits and completion without leaving test stock additions.
