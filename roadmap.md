@@ -1,3 +1,8 @@
+# Soft freezer collection
+- [x] Preserve initial ordering and add a recoverable shared collection checklist.
+- [x] Deduct each collected line atomically, once only.
+- [x] Verify real creation, collection, retry safety, fresh phone reopening and final completion; restore all test stock and remove test sales.
+
 # Overall stock take
 - [x] Collect all freezer counts before a single overall review.
 - [x] Save combined stock take atomically and show total variance.
