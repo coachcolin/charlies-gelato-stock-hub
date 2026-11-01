@@ -1,4 +1,3 @@
-# Overall stock take
 # Soft freezer collection
 - [ ] Preserve initial ordering and add a recoverable collection checklist.
 - [ ] Deduct each collected line atomically, once only.
