@@ -97,7 +97,7 @@ const TILES = [
   },
   {
     to: "/edit-stock",
-    label: "Edit Stock Levels",
+    label: "Total Stock & Stock Take",
     hint: "Stock take & variances",
     icon: PencilRuler,
     tone: "cream" as const,
