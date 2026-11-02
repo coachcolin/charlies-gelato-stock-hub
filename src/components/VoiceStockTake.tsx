@@ -446,5 +446,5 @@ export function useVoiceStockTake(
     </section>
   );
 
-  return { panel };
+  return { panel, hasPending: Boolean(rows?.length) || send.isPending };
 }
