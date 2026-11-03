@@ -578,6 +578,10 @@ export type Database = {
         Args: { _items: Json; _request_id: string }
         Returns: string
       }
+      uncollect_soft_freezer_item: {
+        Args: { _item_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
