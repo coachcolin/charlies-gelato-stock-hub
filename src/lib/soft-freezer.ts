@@ -43,3 +43,9 @@ export async function collectItem(id: string) {
   if (error) throw new Error(error.message);
   return data;
 }
+
+export async function finishCollection(id: string) {
+  const { data, error } = await supabase.rpc("finish_soft_freezer_order", { _order_id: id });
+  if (error) throw new Error(error.message);
+  return data;
+}
