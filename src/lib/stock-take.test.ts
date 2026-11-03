@@ -46,3 +46,13 @@ describe("overall stock take", () => {
     assert.deepEqual(defaultKeeps(rows), {});
   });
 });
+describe("sortTotals", () => {
+  const f = (name: string, stock_qty: number, tub_qty = 0, priority = false) => ({ name, stock_qty, tub_qty, priority });
+  const list = [f("A", 10), f("B", 2, 5, true), f("C", 6, 1)];
+  const mins: Record<string, number> = { A: 4, B: 3, C: 12 };
+  it("furthest below minimum comes first", () => {
+    expect(sortTotals(list, "belowMin", (x) => mins[x.name]).map((x) => x.name)).toEqual(["C", "B", "A"]);
+  });
+  it("fewest trays first", () => expect(sortTotals(list, "trayLow", () => 0).map((x) => x.name)).toEqual(["B", "C", "A"]));
+  it("popular first", () => expect(sortTotals(list, "popular", () => 0)[0].name).toBe("B"));
+});
