@@ -51,8 +51,8 @@ describe("sortTotals", () => {
   const list = [f("A", 10), f("B", 2, 5, true), f("C", 6, 1)];
   const mins: Record<string, number> = { A: 4, B: 3, C: 12 };
   it("furthest below minimum comes first", () => {
-    assert.deepEqual(sortTotals(list, "belowMin", (x) => mins[x.name]).map((x) => x.name), ["C", "B", "A"]);
+    assert.deepEqual(sortTotals(list, "belowMin", (x) => mins[x.name] ?? 0).map((x) => x.name), ["C", "B", "A"]);
   });
   it("fewest trays first", () => assert.deepEqual(sortTotals(list, "trayLow", () => 0).map((x) => x.name), ["B", "C", "A"]));
-  it("popular first", () => assert.equal(sortTotals(list, "popular", () => 0)[0].name, "B"));
+  it("popular first", () => assert.equal(sortTotals(list, "popular", () => 0)[0]?.name, "B"));
 });
