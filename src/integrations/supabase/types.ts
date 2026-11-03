@@ -534,6 +534,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      finish_soft_freezer_order: {
+        Args: { _order_id: string }
+        Returns: boolean
+      }
       freezer_stock_take: {
         Args: { _counts: Json; _freezer_id: string }
         Returns: Json
