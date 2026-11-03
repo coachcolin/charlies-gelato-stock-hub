@@ -43,6 +43,13 @@
       "when": 1793697741906,
       "tag": "0005_finish_soft_freezer_order",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793734547316,
+      "tag": "0006_edit_soft_freezer_items",
+      "breakpoints": true
     }
   ]
 }

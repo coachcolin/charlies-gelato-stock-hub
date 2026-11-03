@@ -556,6 +556,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_soft_freezer_item: {
+        Args: {
+          _flavour_id: string
+          _order_id: string
+          _qty: number
+          _unit: string
+        }
+        Returns: boolean
+      }
       start_production_plan: {
         Args: {
           _days: number
