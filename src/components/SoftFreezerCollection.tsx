@@ -47,7 +47,7 @@ export function SoftFreezerCollection({ order, flavours, onDone }: { order: Coll
     },
     onError: (e: Error) => toast.error(e.message),
   });
-  const busy = collect.isPending || edit.isPending;
+  const busy = collect.isPending || uncollect.isPending || edit.isPending;
   const setQty = (flavourId: string, unit: Unit, qty: number) => edit.mutate({ orderId: order.id, flavourId, unit, qty });
 
   const query = q.trim().toLowerCase();
@@ -66,14 +66,14 @@ export function SoftFreezerCollection({ order, flavours, onDone }: { order: Coll
         <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
           {order.items.map((item) => {
             const checked = item.collected_at !== null;
-            const pending = collect.isPending && collect.variables === item.id;
+            const pending = (collect.isPending && collect.variables === item.id) || (uncollect.isPending && uncollect.variables === item.id);
             return (
               <div key={item.id} className={`flex min-h-16 items-center gap-3 px-3 py-2 ${checked ? "bg-muted" : ""}`}>
                 <Checkbox
                   aria-label={`Collected ${item.flavour_name} ${item.unit}`}
                   checked={checked}
-                  disabled={checked || busy}
-                  onCheckedChange={(value) => { if (value === true) collect.mutate(item.id); }}
+                  disabled={busy}
+                  onCheckedChange={(value) => { if (value === true) collect.mutate(item.id); else uncollect.mutate(item.id); }}
                   className="size-7"
                 />
                 <span className="min-w-0 flex-1">
