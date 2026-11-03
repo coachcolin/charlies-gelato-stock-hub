@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatTraysTubs, unitLabel } from "@/lib/gelato";
-import { collectItem, type CollectionOrder } from "@/lib/soft-freezer";
+import { collectItem, finishCollection, type CollectionOrder } from "@/lib/soft-freezer";
 import { collectionProgress } from "@/lib/soft-freezer-progress";
 
 export function SoftFreezerCollection({ order, onDone }: { order: CollectionOrder; onDone: () => void }) {
@@ -21,6 +21,14 @@ export function SoftFreezerCollection({ order, onDone }: { order: CollectionOrde
       ]);
       // Other stock and sales screens must also read the new movement.
       void qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const finish = useMutation({
+    mutationFn: finishCollection,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["soft-freezer-orders"] });
+      onDone();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -55,13 +63,24 @@ export function SoftFreezerCollection({ order, onDone }: { order: CollectionOrde
           })}
         </div>
       </div>
-      {progress.complete ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-          <div className="mx-auto max-w-4xl p-4">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+        <div className="mx-auto max-w-4xl p-4">
+          {progress.complete ? (
             <Button className="h-16 w-full rounded-2xl text-lg" onClick={onDone}><Check className="mr-2 size-6" />Done</Button>
-          </div>
+          ) : (
+            <Button
+              variant="outline"
+              className="h-16 w-full rounded-2xl text-lg"
+              disabled={finish.isPending || collect.isPending}
+              onClick={() => {
+                if (window.confirm("Finish this collection? Anything not ticked stays in stock.")) finish.mutate(order.id);
+              }}
+            >
+              {finish.isPending ? "Finishing…" : "Finish collection"}
+            </Button>
+          )}
         </div>
-      ) : null}
+      </div>
     </AppShell>
   );
 }
