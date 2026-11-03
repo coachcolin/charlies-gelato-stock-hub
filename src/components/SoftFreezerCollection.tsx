@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { formatTraysTubs, unitLabel, type Flavour, type Unit } from "@/lib/gelato";
-import { collectItem, finishCollection, setCollectionItem, type CollectionOrder } from "@/lib/soft-freezer";
+import { collectItem, finishCollection, setCollectionItem, uncollectItem, type CollectionOrder } from "@/lib/soft-freezer";
 import { collectionProgress } from "@/lib/soft-freezer-progress";
 
 export function SoftFreezerCollection({ order, flavours, onDone }: { order: CollectionOrder; flavours: Flavour[]; onDone: () => void }) {
@@ -15,17 +15,23 @@ export function SoftFreezerCollection({ order, flavours, onDone }: { order: Coll
   const progress = collectionProgress(order.items);
   const [q, setQ] = useState("");
   const refresh = () => qc.invalidateQueries({ queryKey: ["soft-freezer-orders"] });
+  const syncStock = async () => {
+    await Promise.all([
+      refresh(),
+      qc.invalidateQueries({ queryKey: ["flavours"] }),
+      qc.invalidateQueries({ queryKey: ["freezer-stock"] }),
+    ]);
+    // Other stock and sales screens must also read the new movement.
+    void qc.invalidateQueries();
+  };
   const collect = useMutation({
     mutationFn: collectItem,
-    onSuccess: async () => {
-      await Promise.all([
-        refresh(),
-        qc.invalidateQueries({ queryKey: ["flavours"] }),
-        qc.invalidateQueries({ queryKey: ["freezer-stock"] }),
-      ]);
-      // Other stock and sales screens must also read the new movement.
-      void qc.invalidateQueries();
-    },
+    onSuccess: syncStock,
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const uncollect = useMutation({
+    mutationFn: uncollectItem,
+    onSuccess: syncStock,
     onError: (e: Error) => toast.error(e.message),
   });
   const edit = useMutation({
