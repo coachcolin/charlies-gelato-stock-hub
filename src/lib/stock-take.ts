@@ -60,7 +60,7 @@ export function defaultKeeps(rows: OverallCount[]): Record<string, boolean> {
 export type TotalSort = "alpha" | "trayHigh" | "trayLow" | "tubHigh" | "tubLow" | "popular" | "belowMin";
 export const TOTAL_SORT_LABELS: Record<TotalSort, string> = {
   alpha: "Alphabetical", trayHigh: "Most trays", trayLow: "Fewest trays", tubHigh: "Most tubs", tubLow: "Fewest tubs",
-  popular: "Popular flavours", belowMin: "Furthest below minimum",
+  popular: "Popular flavours", belowMin: "Below minimum",
 };
 /** Sort total-stock rows; "belowMin" puts the flavour with the biggest tray shortfall vs its minimum first. */
 export function sortTotals<T extends Pick<Flavour, "name" | "stock_qty" | "tub_qty" | "priority">>(list: T[], sort: TotalSort, minFor: (f: T) => number): T[] {
