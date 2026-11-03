@@ -92,7 +92,7 @@ function StockPage() {
   const totalTubs = (flavours.data ?? []).reduce((s, f) => s + (f.tub_qty ?? 0), 0);
   const used = Math.round((flavours.data ?? []).reduce((s, f) => s + trayEquivalents(f), 0));
   const totalCap = (freezers.data ?? []).reduce((s, f) => s + f.capacity_trays, 0);
-  const pct = totalCap ? Math.min(100, Math.round((used / totalCap) * 100)) : 0;
+  const pct = totalCap ? Math.max(0, Math.min(100, Math.round((used / totalCap) * 100))) : 0;
 
   return (
     <AppShell
@@ -130,8 +130,8 @@ function StockPage() {
             const rows = (fstock.data ?? []).filter((r) => r.freezer_id === fr.id);
             const t = rows.reduce((s, r) => s + r.stock_qty, 0);
             const tb = rows.reduce((s, r) => s + r.tub_qty, 0);
-            const u = Math.round(t + tb / 5);
-            const p = fr.capacity_trays ? Math.min(100, Math.round((u / fr.capacity_trays) * 100)) : 0;
+            const u = Math.max(0, Math.round(t + tb / 5));
+            const p = fr.capacity_trays ? Math.max(0, Math.min(100, Math.round((u / fr.capacity_trays) * 100))) : 0;
             return (
               <div key={fr.id} className="surface p-3">
                 <p className="font-display text-sm">{fr.name}</p>

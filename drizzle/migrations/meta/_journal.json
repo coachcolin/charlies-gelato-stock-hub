@@ -29,6 +29,13 @@
       "when": 1793574566435,
       "tag": "0003_soft_freezer_collection",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793695596316,
+      "tag": "0004_allow_negative_stock",
+      "breakpoints": true
     }
   ]
 }

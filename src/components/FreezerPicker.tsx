@@ -66,7 +66,7 @@ export function ShortfallWarning({
           </li>
         ))}
       </ul>
-      <p className="mt-1 text-xs">You can still confirm. Stock won't go below 0.</p>
+      <p className="mt-1 text-xs">You can still confirm — stock can dip below 0 until the next batch is made.</p>
     </div>
   );
 }
