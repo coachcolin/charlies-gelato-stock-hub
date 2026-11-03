@@ -57,3 +57,23 @@ export function defaultKeeps(rows: OverallCount[]): Record<string, boolean> {
   }
   return keeps;
 }
+export type TotalSort = "alpha" | "trayHigh" | "trayLow" | "tubHigh" | "tubLow" | "popular" | "belowMin";
+export const TOTAL_SORT_LABELS: Record<TotalSort, string> = {
+  alpha: "Alphabetical", trayHigh: "Most trays", trayLow: "Fewest trays", tubHigh: "Most tubs", tubLow: "Fewest tubs",
+  popular: "Popular flavours", belowMin: "Below minimum",
+};
+/** Sort total-stock rows; "belowMin" puts the flavour with the biggest tray shortfall vs its minimum first. */
+export function sortTotals<T extends Pick<Flavour, "name" | "stock_qty" | "tub_qty" | "priority">>(list: T[], sort: TotalSort, minFor: (f: T) => number): T[] {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name);
+  const out = [...list];
+  const cmp: Record<TotalSort, (a: T, b: T) => number> = {
+    alpha: byName,
+    trayHigh: (a, b) => b.stock_qty - a.stock_qty,
+    trayLow: (a, b) => a.stock_qty - b.stock_qty,
+    tubHigh: (a, b) => b.tub_qty - a.tub_qty,
+    tubLow: (a, b) => a.tub_qty - b.tub_qty,
+    popular: (a, b) => Number(b.priority) - Number(a.priority),
+    belowMin: (a, b) => (a.stock_qty - minFor(a)) - (b.stock_qty - minFor(b)),
+  };
+  return out.sort((a, b) => cmp[sort](a, b) || byName(a, b));
+}
