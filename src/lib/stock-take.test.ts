@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { combinedCounts, defaultKeeps, stockTakePayload, parseStockTakeDraft } from "./stock-take";
+import { combinedCounts, defaultKeeps, stockTakePayload, parseStockTakeDraft, sortTotals } from "./stock-take";
 import type { Flavour } from "./gelato";
 
 const flavour = { id: "cherry", name: "Cherry", stock_qty: 3, tub_qty: 8 } as Flavour;
@@ -51,8 +51,8 @@ describe("sortTotals", () => {
   const list = [f("A", 10), f("B", 2, 5, true), f("C", 6, 1)];
   const mins: Record<string, number> = { A: 4, B: 3, C: 12 };
   it("furthest below minimum comes first", () => {
-    expect(sortTotals(list, "belowMin", (x) => mins[x.name]).map((x) => x.name)).toEqual(["C", "B", "A"]);
+    assert.deepEqual(sortTotals(list, "belowMin", (x) => mins[x.name]).map((x) => x.name), ["C", "B", "A"]);
   });
-  it("fewest trays first", () => expect(sortTotals(list, "trayLow", () => 0).map((x) => x.name)).toEqual(["B", "C", "A"]));
-  it("popular first", () => expect(sortTotals(list, "popular", () => 0)[0].name).toBe("B"));
+  it("fewest trays first", () => assert.deepEqual(sortTotals(list, "trayLow", () => 0).map((x) => x.name), ["B", "C", "A"]));
+  it("popular first", () => assert.equal(sortTotals(list, "popular", () => 0)[0].name, "B"));
 });
