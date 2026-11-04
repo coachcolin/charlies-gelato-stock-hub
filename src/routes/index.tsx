@@ -129,7 +129,7 @@ function Home() {
 
       <main className="mx-auto max-w-4xl px-4 py-5">
         <div className="grid grid-cols-2 gap-3">
-          {TILES.map((t, i) => (
+          {TILES.map((t) => (
             <Link
               key={t.to}
               to={t.to}
