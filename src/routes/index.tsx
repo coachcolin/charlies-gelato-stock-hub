@@ -136,8 +136,6 @@ function Home() {
               className={[
                 "surface flex min-h-32 flex-col justify-between p-4 transition-transform active:scale-[0.97]",
                 
-                t.tone === "primary" ? "bg-primary text-primary-foreground" : "",
-                t.tone === "sky" ? "bg-sky text-sky-foreground" : "",
               ].join(" ")}
             >
               <t.icon className="size-8" />
