@@ -7,9 +7,7 @@ import {
   Database,
   FileSpreadsheet,
   IceCreamCone,
-  Minus,
   PencilRuler,
-  Plus,
   Snowflake,
 } from "lucide-react";
 
@@ -39,20 +37,6 @@ export const Route = createFileRoute("/")({
 });
 
 const TILES = [
-  {
-    to: "/remove",
-    label: "Remove Stock",
-    hint: "Trays out to the cabinet",
-    icon: Minus,
-    tone: "primary" as const,
-  },
-  {
-    to: "/add",
-    label: "Add Stock",
-    hint: "Trays made & put away",
-    icon: Plus,
-    tone: "sky" as const,
-  },
   {
     to: "/soft-freezer",
     label: "Soft Freezer Order",
@@ -145,15 +129,13 @@ function Home() {
 
       <main className="mx-auto max-w-4xl px-4 py-5">
         <div className="grid grid-cols-2 gap-3">
-          {TILES.map((t, i) => (
+          {TILES.map((t) => (
             <Link
               key={t.to}
               to={t.to}
               className={[
                 "surface flex min-h-32 flex-col justify-between p-4 transition-transform active:scale-[0.97]",
-                i < 2 ? "col-span-1 min-h-40" : "",
-                t.tone === "primary" ? "bg-primary text-primary-foreground" : "",
-                t.tone === "sky" ? "bg-sky text-sky-foreground" : "",
+                
               ].join(" ")}
             >
               <t.icon className="size-8" />
