@@ -100,6 +100,28 @@ function EditStock() {
       setStarted(false); setFreezerId(null); qc.invalidateQueries(); toast.success("Freezer stock take saved");
     }, onError: (e: Error) => toast.error(e.message),
   });
+  const finishPartial = useMutation({
+    mutationFn: async () => {
+      const done = ids.filter((id) => draft.completed.includes(id));
+      if (!done.length) throw new Error("Finish at least one freezer first.");
+      const all: Variance[] = [];
+      for (const id of done) {
+        const c = draft.counts[id] ?? { tray: {}, tub: {} };
+        const counts = (["tray", "tub"] as Unit[]).flatMap((unit) => Object.entries(c[unit]).map(([flavour_id, qty]) => ({ flavour_id, unit, qty })));
+        if (!counts.length) continue;
+        const result = await singleFreezerStockTake(id, counts);
+        all.push(...result.variances);
+      }
+      return all;
+    },
+    onSuccess: (all) => {
+      const merged = new Map<string, Variance>();
+      for (const v of all) { const k = `${v.name}-${v.unit}`; const p = merged.get(k); merged.set(k, p ? { ...p, after: v.after, diff: p.diff + v.diff } : v); }
+      updateDraft(emptyDraft());
+      setVariances([...merged.values()].filter((v) => v.diff !== 0).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)));
+      setStarted(false); setFreezerId(null); qc.invalidateQueries(); toast.success("Stock take saved");
+    }, onError: (e: Error) => { qc.invalidateQueries(); toast.error(e.message); },
+  });
   const varianceRows = (items: Variance[]) => items.map((v) => <div key={`${v.name}-${v.unit}`} className="surface flex items-center gap-2 px-3 py-3">
     <span className="min-w-0 flex-1 break-words font-display">{v.name}</span>
     <span className="shrink-0 text-xs text-muted-foreground">{v.unit === "tray" ? "Trays" : "Tubs"}</span>
@@ -144,7 +166,9 @@ function EditStock() {
   if (!freezerId) return <AppShell title="Stock Take" subtitle={`${ids.filter((id) => draft.completed.includes(id)).length} of ${ids.length} freezers counted`}>
     <Button variant="ghost" className="mb-3" onClick={() => setStarted(false)}><ArrowLeft className="mr-2 size-4" />Total stock</Button>
     <div className="grid gap-3">{freezerList.map((f) => { const count = draft.counts[f.id]; const done = draft.completed.includes(f.id); return <Button key={f.id} variant="outline" className="surface h-auto justify-start gap-4 whitespace-normal px-5 py-5 text-left" onClick={() => { setFreezerId(f.id); setQ(""); }}><Snowflake className="size-6 shrink-0 text-sky-foreground" /><span className="min-w-0 flex-1"><span className="block font-display text-lg">{f.name}</span><span className="text-xs text-muted-foreground">{done ? `${Object.values(count?.tray ?? {}).reduce((a,b) => a+b,0)} trays · ${Object.values(count?.tub ?? {}).reduce((a,b) => a+b,0)} tubs counted` : `Not counted yet · on record ${(stock.data ?? []).filter((r) => r.freezer_id === f.id).reduce((a, r) => a + r.stock_qty, 0)} trays · ${(stock.data ?? []).filter((r) => r.freezer_id === f.id).reduce((a, r) => a + r.tub_qty, 0)} tubs`}</span></span>{done && <Check className="size-5 shrink-0" />}</Button>; })}</div>
-    {allDone && <Button className="mt-6 h-16 w-full text-lg" onClick={() => { setKeep((prev) => { const next = defaultKeeps(rows); for (const u of unseen) { const key = stockTakeKey(u.id, u.unit); const prior = prev[key]; if (prior !== undefined) next[key] = prior; } return next; }); setChecking(true); }}>Review overall stock</Button>}
+    {allDone && <Button className="mt-6 h-16 w-full text-lg" onClick={() => { setKeep((prev) => { const next = defaultKeeps(rows); for (const u of unseen) { const key = stockTakeKey(u.id, u.unit); const prior = prev[key]; if (prior !== undefined) next[key] = prior; } return next; }); setChecking(true); }}>Finish stock take</Button>}
+    {!allDone && <Button className="mt-6 h-16 w-full text-lg" disabled={finishPartial.isPending || draft.completed.length === 0} onClick={() => { const n = ids.filter((id) => draft.completed.includes(id)).length; if (window.confirm(`Finish the stock take with ${n} of ${ids.length} freezers? Only the boxes you filled in change; freezers you haven't done stay as they are.`)) finishPartial.mutate(); }}>{finishPartial.isPending ? "Saving…" : "Finish stock take"}</Button>}
+    {!allDone && draft.completed.length === 0 && <p className="mt-2 text-center text-sm text-muted-foreground">Finish at least one freezer to finish the stock take.</p>}
   </AppShell>;
   const list = allFlavours.filter((f) => (f.active || f.stock_qty !== 0 || f.tub_qty !== 0 || rows.some((r) => r.flavour_id === f.id && (r.tray !== 0 || r.tub !== 0))) && f.name.toLowerCase().includes(q.trim().toLowerCase()));
   return <AppShell title={`Stock take · ${freezer?.name ?? ""}`} subtitle="Count trays and tubs">
