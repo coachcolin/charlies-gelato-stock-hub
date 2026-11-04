@@ -57,6 +57,13 @@
       "when": 1793734871388,
       "tag": "0007_soft_freezer_untick",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793781145663,
+      "tag": "0008_single_freezer_stock_take",
+      "breakpoints": true
     }
   ]
 }
