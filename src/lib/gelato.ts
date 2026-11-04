@@ -682,3 +682,10 @@ export function planDays(items: PlanItem[], days: number, sorbettoDay: number) {
   }
   return out;
 }
+
+/** Save one freezer's typed counts only; blank boxes and other freezers stay as they are. */
+export async function singleFreezerStockTake(freezerId: string, counts: { flavour_id: string; unit: Unit; qty: number }[]) {
+  const res = await db.rpc("single_freezer_stock_take", { _freezer_id: freezerId, _counts: counts });
+  if (res.error) throw new Error(res.error.message);
+  return res.data as { session_id: string; variances: { name: string; unit: Unit; before: number; after: number; diff: number }[] };
+}

@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVoiceStockTake } from "@/components/VoiceStockTake";
-import { desiredFor, fetchFlavours, fetchFreezerStock, fetchFreezers, fetchSeason, overallStockTake, type Unit } from "@/lib/gelato";
+import { desiredFor, fetchFlavours, fetchFreezerStock, fetchFreezers, fetchSeason, overallStockTake, singleFreezerStockTake, type Unit } from "@/lib/gelato";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { combinedCounts, defaultKeeps, parseStockTakeDraft, sortTotals, TOTAL_SORT_LABELS, type TotalSort, stockTakeKey, stockTakePayload, type StockTakeDraft } from "@/lib/stock-take";
 
@@ -86,13 +86,27 @@ function EditStock() {
       qc.invalidateQueries(); toast.success("Overall stock take saved");
     }, onError: (e: Error) => toast.error(e.message),
   });
+  const saveOne = useMutation({
+    mutationFn: async () => {
+      if (!freezerId) throw new Error("Pick a freezer.");
+      const counts = (["tray", "tub"] as Unit[]).flatMap((unit) => Object.entries(current[unit]).map(([flavour_id, qty]) => ({ flavour_id, unit, qty })));
+      if (!counts.length) throw new Error("Nothing has been counted in this freezer yet.");
+      return singleFreezerStockTake(freezerId, counts);
+    },
+    onSuccess: (result) => {
+      const counts = { ...draft.counts }; if (freezerId) delete counts[freezerId];
+      updateDraft({ counts, completed: draft.completed.filter((id) => id !== freezerId) });
+      setVariances(result.variances.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)));
+      setStarted(false); setFreezerId(null); qc.invalidateQueries(); toast.success("Freezer stock take saved");
+    }, onError: (e: Error) => toast.error(e.message),
+  });
   const varianceRows = (items: Variance[]) => items.map((v) => <div key={`${v.name}-${v.unit}`} className="surface flex items-center gap-2 px-3 py-3">
     <span className="min-w-0 flex-1 break-words font-display">{v.name}</span>
     <span className="shrink-0 text-xs text-muted-foreground">{v.unit === "tray" ? "Trays" : "Tubs"}</span>
     <span className="shrink-0 text-sm">{v.before} → {v.after}</span>
     <span className={`shrink-0 rounded-full px-2 py-1 font-display ${v.diff < 0 ? "bg-primary text-primary-foreground" : "bg-sky text-sky-foreground"}`}>{v.diff > 0 ? "+" : ""}{v.diff}</span>
   </div>);
-  if (variances) return <AppShell title="Overall Variance Report" subtitle="All freezers combined">
+  if (variances) return <AppShell title="Variance Report">
     <div className="mb-4 flex gap-4 font-display"><span>Trays: {variances.filter((v) => v.unit === "tray").reduce((s, v) => s + v.diff, 0)}</span><span>Tubs: {variances.filter((v) => v.unit === "tub").reduce((s, v) => s + v.diff, 0)}</span></div>
     <div className="space-y-2">{varianceRows(variances)}{!variances.length && <p className="py-8 text-center text-muted-foreground">No variances. Overall stock matches the count.</p>}</div>
     <Button className="mt-6 h-14 w-full" onClick={() => setVariances(null)}>Done</Button>
@@ -140,7 +154,7 @@ function EditStock() {
         <Select value={sort} onValueChange={(v) => setSort(v as TotalSort)}><SelectTrigger className="h-13 w-40 shrink-0" aria-label="Sort flavours"><ArrowUpDown className="size-4 shrink-0 text-muted-foreground" /><SelectValue /></SelectTrigger>
           <SelectContent>{(Object.keys(TOTAL_SORT_LABELS) as TotalSort[]).map((k) => <SelectItem key={k} value={k}>{TOTAL_SORT_LABELS[k]}</SelectItem>)}</SelectContent></Select></div>
     <div className="mb-2 flex justify-end gap-2 pr-3 text-xs font-semibold text-muted-foreground"><span className="w-16 text-center">Trays</span><span className="w-16 text-center">Tubs</span></div>
-    <div className="space-y-2 pb-28">{list.map((f) => <div className="surface flex items-center gap-2 px-3 py-3" key={f.id}><span className="min-w-0 flex-1"><span className="block break-words font-display">{f.name}</span><span className="text-xs text-muted-foreground">On record here: {(stock.data ?? []).find((r) => r.freezer_id === freezerId && r.flavour_id === f.id)?.stock_qty ?? 0} trays · {(stock.data ?? []).find((r) => r.freezer_id === freezerId && r.flavour_id === f.id)?.tub_qty ?? 0} tubs</span></span>{(["tray", "tub"] as Unit[]).map((unit) => <Input key={unit} type="number" inputMode="numeric" min={0} className="h-12 w-16 shrink-0 text-center font-display text-lg" aria-label={`${f.name} ${unit === "tray" ? "trays" : "tubs"}`} value={current[unit][f.id] ?? ""} placeholder="—" onFocus={(e) => e.target.select()} onChange={(e) => { const values = { ...current[unit] }; if (!e.target.value) delete values[f.id]; else values[f.id] = Math.max(0, Math.round(Number(e.target.value) || 0)); setCounts({ ...current, [unit]: values }); }} />)}</div>)}</div>
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur"><div className="mx-auto max-w-4xl"><Button className="h-16 w-full text-lg" onClick={() => { if (voice.hasPending) { toast.error("Tap \"Fill in counts\" on your recording first, or discard it."); window.scrollTo({ top: 0, behavior: "smooth" }); return; } if (!Object.keys(current.tray).length && !Object.keys(current.tub).length && !window.confirm("Nothing has been counted in this freezer. Finish it anyway?")) return; updateDraft({ ...draft, counts: { ...draft.counts, [freezerId]: current }, completed: [...new Set([...draft.completed, freezerId])] }); setFreezerId(null); }}>Finish this freezer <Check className="ml-2 size-5" /></Button></div></div>
+    <div className="space-y-2 pb-44">{list.map((f) => <div className="surface flex items-center gap-2 px-3 py-3" key={f.id}><span className="min-w-0 flex-1"><span className="block break-words font-display">{f.name}</span><span className="text-xs text-muted-foreground">On record here: {(stock.data ?? []).find((r) => r.freezer_id === freezerId && r.flavour_id === f.id)?.stock_qty ?? 0} trays · {(stock.data ?? []).find((r) => r.freezer_id === freezerId && r.flavour_id === f.id)?.tub_qty ?? 0} tubs</span></span>{(["tray", "tub"] as Unit[]).map((unit) => <Input key={unit} type="number" inputMode="numeric" min={0} className="h-12 w-16 shrink-0 text-center font-display text-lg" aria-label={`${f.name} ${unit === "tray" ? "trays" : "tubs"}`} value={current[unit][f.id] ?? ""} placeholder="—" onFocus={(e) => e.target.select()} onChange={(e) => { const values = { ...current[unit] }; if (!e.target.value) delete values[f.id]; else values[f.id] = Math.max(0, Math.round(Number(e.target.value) || 0)); setCounts({ ...current, [unit]: values }); }} />)}</div>)}</div>
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur"><div className="mx-auto max-w-4xl"><Button className="h-16 w-full text-lg" onClick={() => { if (voice.hasPending) { toast.error("Tap \"Fill in counts\" on your recording first, or discard it."); window.scrollTo({ top: 0, behavior: "smooth" }); return; } if (!Object.keys(current.tray).length && !Object.keys(current.tub).length && !window.confirm("Nothing has been counted in this freezer. Finish it anyway?")) return; updateDraft({ ...draft, counts: { ...draft.counts, [freezerId]: current }, completed: [...new Set([...draft.completed, freezerId])] }); setFreezerId(null); }}>Finish this freezer <Check className="ml-2 size-5" /></Button><Button variant="outline" className="mt-2 h-12 w-full" disabled={saveOne.isPending} onClick={() => { if (voice.hasPending) { toast.error("Tap \"Fill in counts\" on your recording first, or discard it."); window.scrollTo({ top: 0, behavior: "smooth" }); return; } if (window.confirm(`Save just the ${freezer?.name ?? "freezer"}? Only the boxes you filled in change; blank boxes and the other freezers stay as they are.`)) saveOne.mutate(); }}>{saveOne.isPending ? "Saving…" : "Save just this freezer"}</Button></div></div>
   </AppShell>;
 }
