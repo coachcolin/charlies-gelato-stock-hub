@@ -565,6 +565,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      single_freezer_stock_take: {
+        Args: { _counts: Json; _freezer_id: string }
+        Returns: Json
+      }
       start_production_plan: {
         Args: {
           _days: number
