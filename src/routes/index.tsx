@@ -38,6 +38,20 @@ export const Route = createFileRoute("/")({
 
 const TILES = [
   {
+    to: "/edit-stock",
+    label: "Total Stock & Stock Take",
+    hint: "Stock take & variances",
+    icon: PencilRuler,
+    tone: "primary" as "primary" | "sky" | "cream",
+  },
+  {
+    to: "/production",
+    label: "Production Report",
+    hint: "What to make this week",
+    icon: ClipboardList,
+    tone: "sky" as "primary" | "sky" | "cream",
+  },
+  {
     to: "/soft-freezer",
     label: "Soft Freezer Order",
     hint: "Top up the display freezers",
@@ -59,13 +73,6 @@ const TILES = [
     tone: "cream" as const,
   },
   {
-    to: "/production",
-    label: "Production Report",
-    hint: "What to make this week",
-    icon: ClipboardList,
-    tone: "cream" as const,
-  },
-  {
     to: "/wholesale",
     label: "Wholesale Orders",
     hint: "Import & complete orders",
@@ -77,13 +84,6 @@ const TILES = [
     label: "Sales Reports",
     hint: "Where trays & tubs are going",
     icon: BarChart3,
-    tone: "cream" as const,
-  },
-  {
-    to: "/edit-stock",
-    label: "Total Stock & Stock Take",
-    hint: "Stock take & variances",
-    icon: PencilRuler,
     tone: "cream" as const,
   },
   {
@@ -135,7 +135,8 @@ function Home() {
               to={t.to}
               className={[
                 "surface flex min-h-32 flex-col justify-between p-4 transition-transform active:scale-[0.97]",
-                
+                t.tone === "primary" ? "min-h-40 bg-primary text-primary-foreground" : "",
+                t.tone === "sky" ? "min-h-40 bg-sky text-sky-foreground" : "",
               ].join(" ")}
             >
               <t.icon className="size-8" />
