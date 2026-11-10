@@ -17,3 +17,8 @@
 # Production report daily totals and printing
 - [x] Show a large tray total below each day's plan and report.
 - [x] Print each day separately with its own heading and daily total; verified the saved five-day report produces five A4 pages and totals on tablet/phone without changing stock.
+
+# Wholesale matching and editing
+- [x] Prioritise exact flavour names and leave ambiguous imports unmatched; seven matching/parser tests pass including Coffee versus Coffee and Walnut.
+- [x] Allow changing any matched flavour and adding/removing lines on active orders; prevent sending unresolved lines.
+- [x] Verified real CSV import, corrections, tray quantity edits, tub additions, removals and reload persistence; practice order deleted without sending or deducting stock.

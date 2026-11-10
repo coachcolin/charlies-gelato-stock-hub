@@ -165,29 +165,53 @@ export function parseOrderCsv(text: string): CsvResult {
 const norm = (s: string) =>
   s
     .toLowerCase()
-    .replace(/gelato|sorbetto|sorbetti|sorbet|flavour|trays?|tubs?|\d+\s?(l|ml)\b/g, "")
-    .replace(/[^a-z0-9]/g, "");
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:litres?|liters?|l|ml|kg|g)\b/g, " ")
+    .replace(/\b(?:gelato|sorbetto|sorbetti|sorbet|flavou?r|trays?|tubs?)\b/g, " ")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 
-/** Best-effort match of an imported line description to a known flavour. */
+function similarity(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min((current[j - 1] ?? 0) + 1, (previous[j] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    previous = current;
+  }
+  return 1 - (previous[b.length] ?? 0) / Math.max(a.length, b.length);
+}
+
+/** Exact names first; only unique full-name or high-confidence typo matches are automatic. */
 export function matchFlavour<T extends { id: string; name: string }>(
   raw: string,
   flavours: T[],
 ): T | null {
   const target = norm(raw);
   if (!target) return null;
-  let best: T | null = null;
-  let bestScore = 0;
-  for (const f of flavours) {
-    const n = norm(f.name);
-    if (!n) continue;
-    let score = 0;
-    if (n === target) score = 100;
-    else if (target.includes(n)) score = 70 + n.length;
-    else if (n.includes(target)) score = 60 + target.length;
-    if (score > bestScore) {
-      bestScore = score;
-      best = f;
-    }
-  }
-  return bestScore > 0 ? best : null;
+  const candidates = flavours
+    .filter((f) => !("active" in f) || f.active !== false)
+    .map((flavour) => ({ flavour, name: norm(flavour.name) }))
+    .filter((f) => f.name);
+  const exact = candidates.filter((f) => f.name === target);
+  if (exact.length) return exact.length === 1 ? exact[0]?.flavour ?? null : null;
+
+  const contained = candidates.filter((f) => ` ${target} `.includes(` ${f.name} `));
+  // Discard a shorter flavour only when it is contained in another complete flavour name.
+  const specific = contained.filter((f) => !contained.some((other) =>
+    other !== f && ` ${other.name} `.includes(` ${f.name} `)));
+  if (specific.length) return specific.length === 1 ? specific[0]?.flavour ?? null : null;
+
+  const ranked = candidates.filter((f) => target.length >= 6 &&
+    f.name.split(" ").length === target.split(" ").length)
+    .map((f) => ({ ...f, score: similarity(target, f.name) }))
+    .sort((a, b) => b.score - a.score);
+  const best = ranked[0];
+  return best && best.score >= 0.88 && best.score - (ranked[1]?.score ?? 0) >= 0.1
+    ? best.flavour : null;
 }

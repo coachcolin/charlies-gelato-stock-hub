@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, BookOpen, CheckCircle2, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -159,19 +159,19 @@ function WholesalePage() {
           }
         }}
       />
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 grid grid-cols-2 gap-2">
         <Button
-          className="h-16 flex-1 rounded-2xl text-lg"
+          className="h-16 min-w-0 gap-1 rounded-2xl px-2 text-sm sm:gap-2 sm:text-lg"
           onClick={() => fileRef.current?.click()}
         >
-          <Upload className="mr-2 size-5" /> Import order (CSV)
+          <Upload className="size-5 shrink-0" /> <span className="whitespace-normal">Import order (CSV)</span>
         </Button>
         <Button
           variant="outline"
-          className="h-16 flex-1 rounded-2xl text-lg"
+          className="h-16 min-w-0 gap-1 rounded-2xl px-2 text-sm sm:gap-2 sm:text-lg"
           onClick={() => setManualOpen(true)}
         >
-          <Plus className="mr-2 size-5" /> Enter order
+          <Plus className="size-5 shrink-0" /> <span className="whitespace-normal">Enter order</span>
         </Button>
       </div>
 
@@ -365,6 +365,19 @@ type OrderWithItems = Awaited<ReturnType<typeof fetchOrders>>[number];
 function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours: Flavour[] }) {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries();
+  const [flavourPicker, setFlavourPicker] = useState<string | null>(null);
+  const [flavourSearch, setFlavourSearch] = useState("");
+  const [newQty, setNewQty] = useState(1);
+  const [newUnit, setNewUnit] = useState<Unit>("tray");
+  const pickerMatches = flavours.filter((f) => f.active &&
+    f.name.toLowerCase().includes(flavourSearch.trim().toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const openPicker = (id: string) => {
+    setFlavourSearch("");
+    setNewQty(1);
+    setNewUnit("tray");
+    setFlavourPicker(id);
+  };
 
   const stockOf = (id: string | null, unit: Unit = "tray") => {
     const f = id ? flavours.find((x) => x.id === id) : undefined;
@@ -401,6 +414,7 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
       if (res.error) throw new Error(res.error.message);
     },
     onSuccess: refresh,
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const setItemFlavour = useMutation({
@@ -411,11 +425,27 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
         .eq("id", id);
       if (res.error) throw new Error(res.error.message);
     },
-    onSuccess: refresh,
+    onSuccess: () => { refresh(); setFlavourPicker(null); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addItem = useMutation({
+    mutationFn: async (flavour: Flavour) => {
+      const { error } = await db.from("wholesale_order_items").insert({
+        order_id: order.id, flavour_id: flavour.id, flavour_name: flavour.name,
+        qty: newQty, unit: newUnit,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => { refresh(); setFlavourPicker(null); },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const complete = useMutation({
     mutationFn: async () => {
+      if (!order.items.length || order.items.some((i) => !i.flavour_id || i.qty <= 0)) {
+        throw new Error("Choose a flavour and a positive quantity for every line before sending.");
+      }
       const lines = order.items
         .filter((i) => i.flavour_id)
         .map((i) => ({ flavour_id: i.flavour_id as string, qty: -i.qty, unit: i.unit }));
@@ -446,6 +476,10 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
     },
     onSuccess: refresh,
   });
+
+  const saving = patchItem.isPending || removeItem.isPending || setItemFlavour.isPending ||
+    addItem.isPending || patchOrder.isPending;
+  const unresolved = order.items.some((i) => !i.flavour_id || i.qty <= 0);
 
   return (
     <div className="surface p-4">
@@ -504,9 +538,15 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
           const stock = stockOf(i.flavour_id, i.unit);
           const short = Boolean(i.flavour_id) && i.qty > stock;
           return (
-            <div key={i.id} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{i.flavour_name}</span>
+            <div key={i.id} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1 basis-full sm:basis-0">
+                <Button variant="ghost" className="h-auto max-w-full justify-start gap-2 px-0 py-1 text-left text-sm"
+                  disabled={saving || complete.isPending}
+                  aria-label={`Change flavour for ${i.flavour_name}`}
+                  onClick={() => openPicker(i.id)}>
+                  <span className="min-w-0 whitespace-normal">{i.flavour_name}</span>
+                  <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
+                </Button>
                 {i.flavour_id ? (
                   <span
                     className={`text-xs ${short ? "text-primary" : "text-muted-foreground"}`}
@@ -514,29 +554,17 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
                     {stock} {i.unit === "tub" ? "tubs" : "trays"} in stock
                   </span>
                 ) : (
-                  <select
-                    className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-xs"
-                    defaultValue=""
-                    onChange={(e) => {
-                      const f = flavours.find((x) => x.id === e.target.value);
-                      if (f) setItemFlavour.mutate({ id: i.id, flavour: f });
-                    }}
-                  >
-                    <option value="">Match to a flavour…</option>
-                    {flavours.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="block text-xs text-primary">Needs matching</span>
                 )}
               </span>
               <UnitToggle
                 unit={i.unit}
+                disabled={saving || complete.isPending}
                 onChange={(unit) => patchItem.mutate({ id: i.id, unit })}
               />
               <Input
                 type="number"
+                disabled={saving || complete.isPending}
                 inputMode="numeric"
                 defaultValue={i.qty}
                 onBlur={(e) =>
@@ -545,23 +573,54 @@ function ActiveOrderCard({ order, flavours }: { order: OrderWithItems; flavours:
                 className="h-11 w-20 text-center font-display"
                 aria-label={`${i.flavour_name} quantity`}
               />
-              <button
-                type="button"
+              <Button
+                variant="ghost" size="icon"
+                disabled={saving || complete.isPending}
                 onClick={() => removeItem.mutate(i.id)}
                 className="flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
                 aria-label={`Remove ${i.flavour_name}`}
               >
                 <Trash2 className="size-4" />
-              </button>
+              </Button>
             </div>
           );
         })}
       </div>
 
+      <Button variant="outline" className="mt-3 w-full" disabled={saving || complete.isPending}
+        onClick={() => openPicker("new")}><Plus className="size-4" /> Add flavour</Button>
+      {unresolved ? <p className="mt-3 text-sm text-primary">Some lines need a flavour or quantity.</p> : null}
+
+      <Dialog open={flavourPicker !== null} onOpenChange={(open) => !open && setFlavourPicker(null)}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{flavourPicker === "new" ? "Add flavour" : "Change flavour"}</DialogTitle>
+            <DialogDescription>{order.wholesaler}</DialogDescription>
+          </DialogHeader>
+          <Input aria-label="Search order flavours" placeholder="Search flavours…" value={flavourSearch}
+            onChange={(e) => setFlavourSearch(e.target.value)} />
+          {flavourPicker === "new" ? <div className="flex items-center gap-3">
+            <UnitToggle unit={newUnit} onChange={setNewUnit} disabled={addItem.isPending} />
+            <Input aria-label="New line quantity" type="number" inputMode="numeric" min={1} value={newQty}
+              onChange={(e) => setNewQty(Math.max(1, Math.round(Number(e.target.value) || 1)))} />
+          </div> : null}
+          <div className="max-h-80 space-y-1 overflow-y-auto">
+            {pickerMatches.map((f) => <Button key={f.id} variant="ghost"
+              className="h-auto min-h-11 w-full justify-start whitespace-normal text-left"
+              disabled={setItemFlavour.isPending || addItem.isPending}
+              onClick={() => {
+                if (flavourPicker === "new") addItem.mutate(f);
+                else if (flavourPicker) setItemFlavour.mutate({ id: flavourPicker, flavour: f });
+              }}>{f.name}</Button>)}
+            {!pickerMatches.length ? <p className="py-4 text-sm text-muted-foreground">No flavours found.</p> : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="mt-4 flex gap-2">
         <Button
           className="h-13 flex-1 rounded-2xl"
-          disabled={complete.isPending}
+          disabled={complete.isPending || saving || unresolved || !order.items.length}
           onClick={() => complete.mutate()}
         >
           Mark as sent
@@ -813,10 +872,11 @@ function itemsTotal(items: { qty: number; unit: Unit }[]) {
   );
 }
 
-function UnitToggle({ unit, onChange }: { unit: Unit; onChange: (u: Unit) => void }) {
+function UnitToggle({ unit, onChange, disabled = false }: { unit: Unit; onChange: (u: Unit) => void; disabled?: boolean }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      disabled={disabled}
       onClick={() => onChange(unit === "tub" ? "tray" : "tub")}
       className={`h-11 shrink-0 rounded-xl px-3 font-display text-sm ${
         unit === "tub" ? "bg-sky text-sky-foreground" : "bg-cream text-cream-foreground"
@@ -824,6 +884,6 @@ function UnitToggle({ unit, onChange }: { unit: Unit; onChange: (u: Unit) => voi
       aria-label="Switch between trays and tubs"
     >
       {unit === "tub" ? "Tubs" : "Trays"}
-    </button>
+    </Button>
   );
 }
