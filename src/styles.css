@@ -230,6 +230,18 @@
     font-size: 15pt;
   }
 
+  .print-sheet .print-day + .print-day {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-sheet .print-day-total {
+    margin-top: 14pt;
+    font-size: 18pt;
+    font-weight: 700;
+    break-inside: avoid;
+  }
+
   .print-sheet h3 {
     font-size: 11.5pt;
     margin-top: 12pt;

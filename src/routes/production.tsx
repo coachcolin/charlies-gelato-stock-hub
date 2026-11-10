@@ -87,6 +87,19 @@ function DayTabs({
 }
 
 type Pick = { trays: number; tubs: number; day: number };
+
+function DayTotal({ trays, tubs }: { trays: number; tubs: number }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-2 border-t-2 border-border px-1 py-5" aria-label="Daily production total">
+      <span className="font-display text-lg">Total trays</span>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="font-display text-4xl tabular-nums">{trays}</span>
+        {tubs > 0 ? <span className="text-base text-muted-foreground">{tubs} tubs</span> : null}
+      </div>
+    </div>
+  );
+}
+
 type Section = "gelato" | "sorbetto" | "allergen" | "special";
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "gelato", label: "Gelato" },
@@ -404,6 +417,7 @@ function ProductionPage() {
               </div>
             );
           })}
+          <DayTotal trays={dayItems.reduce((t, c) => t + c.trays, 0)} tubs={dayItems.reduce((t, c) => t + c.tubs, 0)} />
         </div>
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-4 backdrop-blur">
           <div className="mx-auto flex max-w-4xl gap-2">
@@ -702,8 +716,8 @@ function ActiveReport({
     dayNumbers.map((day) => [
       day,
       report.items
-        .filter((i) => (i.day_index ?? 1) === day)
-        .reduce((t, i) => t + i.suggested_qty, 0),
+        .filter((i) => (editDays[i.id] ?? i.day_index ?? 1) === day)
+        .reduce((t, i) => t + (qtys[i.id] ?? i.produced_qty ?? i.suggested_qty), 0),
     ]),
   );
 
@@ -737,7 +751,7 @@ function ActiveReport({
         ) : null}
         <section className="space-y-2">
           {report.items
-            .filter((i) => (multiDay ? (i.day_index ?? 1) === activeDay : true))
+            .filter((i) => (multiDay ? (editDays[i.id] ?? i.day_index ?? 1) === activeDay : true))
             .map((i) => {
           const value = qtys[i.id] ?? i.produced_qty ?? i.suggested_qty;
           const tubValue = tubQtys[i.id] ?? i.produced_tubs ?? i.suggested_tubs ?? 0;
@@ -865,6 +879,12 @@ function ActiveReport({
             <Plus className="mr-2 size-5" /> Add a flavour to this plan
           </Button>
         ) : null}
+        <DayTotal
+          trays={dayTrayTotals[activeDay] ?? 0}
+          tubs={report.items
+            .filter((i) => (editDays[i.id] ?? i.day_index ?? 1) === activeDay)
+            .reduce((t, i) => t + (tubQtys[i.id] ?? i.produced_tubs ?? i.suggested_tubs ?? 0), 0)}
+        />
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -982,25 +1002,22 @@ function PrintSheet({
       tubs: showMade ? (i.produced_tubs ?? i.suggested_tubs ?? 0) : (i.suggested_tubs ?? 0),
     };
   };
-  const totalTrays = report.items.reduce((t, i) => t + qtyOf(i).trays, 0);
-  const totalTubs = report.items.reduce((t, i) => t + qtyOf(i).tubs, 0);
-
   return (
     <div className="print-sheet" aria-hidden="true">
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-display font-bold">Production report — Charlie's Gelato</h2>
-        <p className="print-meta">
-          {new Date(report.created_at).toLocaleDateString()} · {report.season} season
-          {multiDay ? ` · ${dayNumbers.length}-day week` : ""}
-          {completed ? " · completed" : ""}
-        </p>
-      </div>
       {dayNumbers.map((day) => {
         const items = multiDay ? report.items.filter((i) => (i.day_index ?? 1) === day) : report.items;
-        if (items.length === 0) return null;
         const dayTrays = items.reduce((t, i) => t + qtyOf(i).trays, 0);
+        const dayTubs = items.reduce((t, i) => t + qtyOf(i).tubs, 0);
         return (
-          <section key={day}>
+          <section key={day} className="print-day">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-display font-bold">Production report — Charlie's Gelato</h2>
+              <p className="print-meta">
+                {new Date(report.created_at).toLocaleDateString()} · {report.season} season
+                {multiDay ? ` · ${dayNumbers.length}-day week` : ""}
+                {completed ? " · completed" : ""}
+              </p>
+            </div>
             <h3>{multiDay ? `Day ${day} · ${dayTrays} trays` : `${dayTrays} trays to make`}</h3>
             <table>
               <thead>
@@ -1031,12 +1048,13 @@ function PrintSheet({
                 })}
               </tbody>
             </table>
+            <p className="print-day-total">Total trays: {dayTrays}{dayTubs > 0 ? ` · ${dayTubs} tubs` : ""}</p>
+            <p className="print-total">
+              {completed ? "Made" : "To make"}: {formatTraysTubs(dayTrays, dayTubs)} · Printed {new Date().toLocaleDateString()}
+            </p>
           </section>
         );
       })}
-      <p className="print-total">
-        {completed ? "Made" : "To make"}: {formatTraysTubs(totalTrays, totalTubs)} · Printed {new Date().toLocaleDateString()}
-      </p>
     </div>
   );
 }
