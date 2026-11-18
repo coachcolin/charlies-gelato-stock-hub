@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PRODUCTION_DRAFT_KEY, parseProductionDraft, productionDays } from "@/lib/production-plan";
+import { PRODUCTION_DRAFT_KEY, parseProductionDraft, productionDays, unfinishedProductionItem, matchesProductionFlavour } from "@/lib/production-plan";
 import {
   GROUP_LABEL,
   MAX_DAY_TRAYS,
@@ -163,7 +163,7 @@ function ProductionPage() {
 
   const visible = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return (flavours.data ?? []).filter((f) => f.active && f.name.toLowerCase().includes(query));
+    return (flavours.data ?? []).filter((f) => f.active && matchesProductionFlavour(f.name, query));
   }, [flavours.data, q]);
 
   const add = (id: string, unit: Unit, delta: number) =>
@@ -712,6 +712,7 @@ function ActiveReport({
   const dayNumbers = productionDays(report.days, report.items.map((i) => editDays[i.id] ?? i.day_index ?? 1));
   const multiDay = dayNumbers.length > 1;
   const activeDay = selectedDay ?? dayNumbers[0] ?? 1;
+  const existingAddItem = addFlavour ? unfinishedProductionItem(report.items, addFlavour.id) : undefined;
   const dayTrayTotals = Object.fromEntries(
     dayNumbers.map((day) => [
       day,
@@ -905,19 +906,26 @@ function ActiveReport({
               <div className="space-y-1">
                 {(flavours.data ?? [])
                   .filter((f) => f.active)
-                  .filter((f) => !outstanding.some((i) => i.flavour_id === f.id))
-                  .filter((f) => f.name.toLowerCase().includes(addQuery.trim().toLowerCase()))
-                  .map((f) => (
-                    <button
+                  .filter((f) => matchesProductionFlavour(f.name, addQuery))
+                  .map((f) => {
+                    const existing = unfinishedProductionItem(report.items, f.id);
+                    return (
+                    <Button
                       key={f.id}
+                      variant="ghost"
                       type="button"
-                      className="surface flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition active:scale-[0.99]"
-                      onClick={() => setAddFlavour(f)}
+                      className="surface flex h-auto w-full items-center justify-between gap-2 whitespace-normal rounded-xl px-4 py-3 text-left transition active:scale-[0.99]"
+                      onClick={() => {
+                        setAddFlavour(f);
+                        setAddTrays(existing ? (qtys[existing.id] ?? existing.produced_qty ?? existing.suggested_qty) : 0);
+                        setAddTubs(existing ? (tubQtys[existing.id] ?? existing.produced_tubs ?? existing.suggested_tubs ?? 0) : 0);
+                      }}
                     >
                       <span className="font-display text-base">{f.name}</span>
-                      <span className="text-xs text-muted-foreground">{formatTraysTubs(f.stock_qty, f.tub_qty)} in stock</span>
-                    </button>
-                  ))}
+                      <span className="text-xs text-muted-foreground">{existing ? `On day ${editDays[existing.id] ?? existing.day_index}` : `${formatTraysTubs(f.stock_qty, f.tub_qty)} in stock`}</span>
+                    </Button>
+                  ); })}
+                {(flavours.data ?? []).filter((f) => f.active && matchesProductionFlavour(f.name, addQuery)).length === 0 ? <p className="py-3 text-sm text-muted-foreground">No matching flavours.</p> : null}
               </div>
             </div>
           ) : (
@@ -928,6 +936,7 @@ function ActiveReport({
                 </Button>
                 <p className="font-display text-lg">{addFlavour.name}</p>
               </div>
+              {existingAddItem ? <p className="text-sm text-muted-foreground">Already on day {editDays[existingAddItem.id] ?? existingAddItem.day_index} · {formatTraysTubs(qtys[existingAddItem.id] ?? existingAddItem.suggested_qty, tubQtys[existingAddItem.id] ?? existingAddItem.suggested_tubs ?? 0)}</p> : null}
               <div className="flex items-center gap-3">
                 <Input
                   type="number" inputMode="numeric" min={0} step={1}
@@ -954,10 +963,26 @@ function ActiveReport({
               </div>
               <Button
                 className="h-14 w-full rounded-2xl text-base"
-                disabled={addItem.isPending || (addTrays === 0 && addTubs === 0)}
-                onClick={() => addItem.mutate({ flavourId: addFlavour.id, trays: addTrays, tubs: addTubs, day: addDay })}
+                disabled={addItem.isPending || saveItem.isPending || tick.isPending || finish.isPending || (addTrays === 0 && addTubs === 0)}
+                onClick={() => {
+                  if (!existingAddItem) {
+                    addItem.mutate({ flavourId: addFlavour.id, trays: addTrays, tubs: addTubs, day: addDay });
+                    return;
+                  }
+                  const itemId = existingAddItem.id;
+                  saveItem.mutate({ _item_id: itemId, _trays: addTrays, _tubs: addTubs, _day: addDay, _note: notes[itemId] ?? existingAddItem.note ?? "" }, {
+                    onSuccess: () => {
+                      setEditDays((prev) => ({ ...prev, [itemId]: addDay }));
+                      setQtys((prev) => ({ ...prev, [itemId]: addTrays }));
+                      setTubQtys((prev) => ({ ...prev, [itemId]: addTubs }));
+                      setSelectedDay(addDay);
+                      setAddOpen(false); setAddFlavour(null); setAddQuery(""); setAddTrays(0); setAddTubs(0);
+                      toast.success(`Saved on day ${addDay}`);
+                    },
+                  });
+                }}
               >
-                Add to the plan
+                {existingAddItem ? `Save on day ${addDay}` : "Add to the plan"}
               </Button>
             </div>
           )}

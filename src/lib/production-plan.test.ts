@@ -1,8 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseProductionDraft, productionDays } from "./production-plan";
+import { parseProductionDraft, productionDays, unfinishedProductionItem, matchesProductionFlavour } from "./production-plan";
 
 describe("production persistence", () => {
+  it("finds Chocolate Fudge Ripple when staff search choc fudge ripple", () => {
+    assert.equal(matchesProductionFlavour("Chocolate Fudge Ripple", "choc fudge ripple"), true);
+    assert.equal(matchesProductionFlavour("Chocolate", "choc fudge ripple"), false);
+  });
+  it("finds Chocolate Fudge Ripple on day 4 so it can be moved to day 2 rather than hidden", () => {
+    const item = { id: "existing", flavour_id: "choc-fudge", done: false, day_index: 4, suggested_qty: 7 };
+    assert.equal(unfinishedProductionItem([item], "choc-fudge"), item);
+    assert.equal(unfinishedProductionItem([{ ...item, done: true }], "choc-fudge"), undefined);
+  });
   it("restores chosen trays, tubs, day 7 and notes before the report is started", () => {
     const draft = { id: "saved-plan", picks: { strawberry: { trays: 2, tubs: 5, day: 7 } }, ticked: ["order"], notes: { strawberry: "Make first" }, dayCount: 3, reviewing: true };
     assert.deepEqual(parseProductionDraft(JSON.stringify(draft)), draft);

@@ -10,6 +10,16 @@ export type ProductionDraft = {
 
 export const PRODUCTION_DRAFT_KEY = "charlies-production-draft-v1";
 
+export function matchesProductionFlavour(name: string, query: string): boolean {
+  const words = name.toLowerCase().split(/\s+/);
+  return query.trim().toLowerCase().split(/\s+/).every((part) => words.some((word) => word.startsWith(part)));
+}
+
+/** An unfinished flavour stays discoverable even when assigned to another day. */
+export function unfinishedProductionItem<T extends { flavour_id: string | null; done: boolean }>(items: T[], flavourId: string): T | undefined {
+  return items.find((item) => item.flavour_id === flavourId && !item.done);
+}
+
 export function parseProductionDraft(raw: string | null): ProductionDraft | null {
   if (!raw) return null;
   try {
