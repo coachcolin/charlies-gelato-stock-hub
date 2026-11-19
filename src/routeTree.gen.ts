@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
+import { Route as CorrectRouteImport } from './routes/correct'
 import { Route as DataRouteImport } from './routes/data'
 import { Route as EditStockRouteImport } from './routes/edit-stock'
 import { Route as MoveRouteImport } from './routes/move'
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
 const AddRoute = AddRouteImport.update({
   id: '/add',
   path: '/add',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CorrectRoute = CorrectRouteImport.update({
+  id: '/correct',
+  path: '/correct',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DataRoute = DataRouteImport.update({
@@ -80,6 +86,7 @@ const WholesaleRoute = WholesaleRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/correct': typeof CorrectRoute
   '/data': typeof DataRoute
   '/edit-stock': typeof EditStockRoute
   '/move': typeof MoveRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/correct': typeof CorrectRoute
   '/data': typeof DataRoute
   '/edit-stock': typeof EditStockRoute
   '/move': typeof MoveRoute
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/correct': typeof CorrectRoute
   '/data': typeof DataRoute
   '/edit-stock': typeof EditStockRoute
   '/move': typeof MoveRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/add'
+    | '/correct'
     | '/data'
     | '/edit-stock'
     | '/move'
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/add'
+    | '/correct'
     | '/data'
     | '/edit-stock'
     | '/move'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/add'
+    | '/correct'
     | '/data'
     | '/edit-stock'
     | '/move'
@@ -162,6 +174,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
+  CorrectRoute: typeof CorrectRoute
   DataRoute: typeof DataRoute
   EditStockRoute: typeof EditStockRoute
   MoveRoute: typeof MoveRoute
@@ -187,6 +200,13 @@ declare module '@tanstack/react-router' {
       path: '/add'
       fullPath: '/add'
       preLoaderRoute: typeof AddRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/correct': {
+      id: '/correct'
+      path: '/correct'
+      fullPath: '/correct'
+      preLoaderRoute: typeof CorrectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/data': {
@@ -258,6 +278,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
+  CorrectRoute: CorrectRoute,
   DataRoute: DataRoute,
   EditStockRoute: EditStockRoute,
   MoveRoute: MoveRoute,

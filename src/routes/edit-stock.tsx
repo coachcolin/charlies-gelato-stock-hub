@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Minus, Plus, ArrowLeft, ArrowUpDown, Check, EyeOff, Search, Snowflake } from "lucide-react";
+import { Minus, Plus, Wrench, ArrowLeft, ArrowUpDown, Check, EyeOff, Search, Snowflake } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -155,6 +155,7 @@ function EditStock() {
         <Link to="/remove" className="surface flex min-h-20 items-center gap-3 bg-primary p-4 text-primary-foreground active:scale-[0.97]"><Minus className="size-7" /><span className="font-display text-lg leading-tight">Remove Stock</span></Link>
         <Link to="/add" className="surface flex min-h-20 items-center gap-3 bg-sky p-4 text-sky-foreground active:scale-[0.97]"><Plus className="size-7" /><span className="font-display text-lg leading-tight">Add Stock</span></Link>
       </div>
+      <Link to="/correct" className="surface mb-3 flex min-h-14 items-center gap-3 bg-muted p-4 text-foreground active:scale-[0.97]"><Wrench className="size-6" /><span className="font-display text-base leading-tight">Correct Stock <span className="text-sm text-muted-foreground">— fix mistakes, not counted as sales</span></span></Link>
       <Button className="mb-4 h-16 w-full text-lg" onClick={() => { setStarted(true); setQ(""); }}>{inProgress ? `Continue stock take (${draft.completed.length} of ${ids.length} freezers done)` : "Do stock take"}</Button>
       <div className="mb-3 flex gap-2"><div className="relative flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input className="h-13 pl-12" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search flavours…" /></div>
         <Select value={sort} onValueChange={(v) => setSort(v as TotalSort)}><SelectTrigger className="h-13 w-40 shrink-0" aria-label="Sort flavours"><ArrowUpDown className="size-4 shrink-0 text-muted-foreground" /><SelectValue /></SelectTrigger>
